@@ -6,3 +6,7 @@ dist/
 *.log
 .DS_Store
 coverage/
+*.tsbuildinfo
+scripts/*.js
+scripts/*.js.map
+scripts/*.d.ts
