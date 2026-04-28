@@ -62,7 +62,7 @@ export class AdminService {
 
     let query = db
       .from('profiles')
-      .select('*, subscriptions(plan, status, trial_ends_at)', { count: 'exact' })
+      .select('*', { count: 'exact' })
       .order('created_at', { ascending: false })
       .range(from, to)
 
@@ -73,12 +73,15 @@ export class AdminService {
     const { data, count, error } = await query
     if (error) throw new Error(error.message)
 
-    // Get group counts per user
     const userIds = (data ?? []).map((u: any) => u.user_id)
-    const { data: groupCounts } = await db
-      .from('groups')
-      .select('admin_id')
-      .in('admin_id', userIds)
+
+    const [{ data: subscriptions }, { data: groupCounts }] = await Promise.all([
+      db.from('subscriptions').select('user_id, plan, status, trial_ends_at').in('user_id', userIds),
+      db.from('groups').select('admin_id').in('admin_id', userIds),
+    ])
+
+    const subMap: Record<string, any> = {}
+    for (const s of subscriptions ?? []) subMap[s.user_id] = s
 
     const groupCountMap: Record<string, number> = {}
     for (const g of groupCounts ?? []) {
@@ -88,6 +91,7 @@ export class AdminService {
     return {
       data: (data ?? []).map((u: any) => ({
         ...u,
+        subscriptions: subMap[u.user_id] ?? null,
         groups_count: groupCountMap[u.user_id] ?? 0,
       })),
       total: count ?? 0,
@@ -215,12 +219,27 @@ export class AdminService {
 
     const { data, count, error } = await db
       .from('subscriptions')
-      .select('*, profiles(name, phone)', { count: 'exact' })
+      .select('*', { count: 'exact' })
       .order('created_at', { ascending: false })
       .range(from, to)
 
     if (error) throw new Error(error.message)
-    return { data: data ?? [], total: count ?? 0, page, limit }
+
+    const userIds = (data ?? []).map((s: any) => s.user_id)
+    const { data: profiles } = await db
+      .from('profiles')
+      .select('user_id, name, phone')
+      .in('user_id', userIds)
+
+    const profileMap: Record<string, any> = {}
+    for (const p of profiles ?? []) profileMap[p.user_id] = p
+
+    return {
+      data: (data ?? []).map((s: any) => ({ ...s, profiles: profileMap[s.user_id] ?? null })),
+      total: count ?? 0,
+      page,
+      limit,
+    }
   }
 
   async getActivity(limit = 50) {
@@ -235,8 +254,16 @@ export class AdminService {
       db.from('profiles').select('user_id, name, phone, created_at').order('created_at', { ascending: false }).limit(10),
       db.from('payouts').select('id, amount, paid_out_at, group_id, group_members(name)').order('paid_out_at', { ascending: false }).limit(10),
       db.from('groups').select('id, name, admin_id, created_at').order('created_at', { ascending: false }).limit(10),
-      db.from('subscriptions').select('id, user_id, plan, status, created_at, profiles(name, phone)').order('created_at', { ascending: false }).limit(10),
+      db.from('subscriptions').select('id, user_id, plan, status, created_at').order('created_at', { ascending: false }).limit(10),
     ])
+
+    // Fetch profiles for recent subs separately
+    const subUserIds = (recentSubs ?? []).map((s: any) => s.user_id)
+    const { data: subProfiles } = subUserIds.length
+      ? await db.from('profiles').select('user_id, name, phone').in('user_id', subUserIds)
+      : { data: [] }
+    const subProfileMap: Record<string, any> = {}
+    for (const p of subProfiles ?? []) subProfileMap[p.user_id] = p
 
     const activity: any[] = []
 
@@ -251,8 +278,8 @@ export class AdminService {
       activity.push({ type: 'group', label: `New group created: ${g.name}`, meta: g.admin_id, time: g.created_at })
     }
     for (const s of recentSubs ?? []) {
-      const profile = (s.profiles as any)
-      activity.push({ type: 'subscription', label: `${profile?.name ?? 'User'} selected ${s.plan} plan (${s.status})`, meta: profile?.phone ?? '', time: s.created_at })
+      const profile = subProfileMap[(s as any).user_id]
+      activity.push({ type: 'subscription', label: `${profile?.name ?? 'User'} selected ${(s as any).plan} plan (${(s as any).status})`, meta: profile?.phone ?? '', time: (s as any).created_at })
     }
 
     return activity
