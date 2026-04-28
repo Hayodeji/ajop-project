@@ -7,76 +7,38 @@ import { supabase } from '@/lib/supabase'
 import { adminGetStats } from '@/lib/adminApi'
 import { normalisePhone, isValidNigerianPhone } from '@/lib/utils'
 
-type Mode = 'signin' | 'signup'
-
-const signInSchema = Yup.object({
+const schema = Yup.object({
   phone: Yup.string()
     .required('Phone number required')
     .test('ng', 'Enter a valid Nigerian phone number', (v) =>
       isValidNigerianPhone(normalisePhone(v ?? '')),
     ),
   password: Yup.string().min(8, 'At least 8 characters').required('Password required'),
-})
-
-const signUpSchema = Yup.object({
-  phone: Yup.string()
-    .required('Phone number required')
-    .test('ng', 'Enter a valid Nigerian phone number', (v) =>
-      isValidNigerianPhone(normalisePhone(v ?? '')),
-    ),
-  password: Yup.string().min(8, 'At least 8 characters').required('Password required'),
-  confirmPassword: Yup.string()
-    .oneOf([Yup.ref('password')], 'Passwords do not match')
-    .required('Confirm your password'),
 })
 
 export default function AdminLoginPage() {
   const navigate = useNavigate()
-  const [mode, setMode] = useState<Mode>('signin')
   const [error, setError] = useState('')
-  const isSignUp = mode === 'signup'
 
   const formik = useFormik({
-    initialValues: { phone: '', password: '', confirmPassword: '' },
-    validationSchema: isSignUp ? signUpSchema : signInSchema,
+    initialValues: { phone: '', password: '' },
+    validationSchema: schema,
     onSubmit: async (values, { setSubmitting }) => {
       setError('')
       const phone = normalisePhone(values.phone)
 
       try {
-        if (isSignUp) {
-          const { error: authError } = await supabase.auth.signUp({
-            phone,
-            password: values.password,
-          })
-          if (authError) throw new Error(authError.message)
+        const { error: authError } = await supabase.auth.signInWithPassword({
+          phone,
+          password: values.password,
+        })
+        if (authError) throw new Error(authError.message)
 
-          // Verify this phone has super-admin access
-          try {
-            await adminGetStats()
-            toast.success('Account created. Welcome, Super Admin!')
-            navigate('/admin/dashboard', { replace: true })
-          } catch {
-            await supabase.auth.signOut()
-            setError('Account created but this number is not authorised for admin access. Contact the platform owner.')
-          }
-        } else {
-          const { error: authError } = await supabase.auth.signInWithPassword({
-            phone,
-            password: values.password,
-          })
-          if (authError) throw new Error(authError.message)
-
-          try {
-            await adminGetStats()
-            toast.success('Welcome back, Super Admin')
-            navigate('/admin/dashboard', { replace: true })
-          } catch {
-            await supabase.auth.signOut()
-            setError('Access denied. This account does not have admin privileges.')
-          }
-        }
+        await adminGetStats()
+        toast.success('Welcome back, Super Admin')
+        navigate('/admin/dashboard', { replace: true })
       } catch (err) {
+        await supabase.auth.signOut()
         const msg = err instanceof Error ? err.message : 'Something went wrong'
         setError(msg)
       } finally {
@@ -88,7 +50,6 @@ export default function AdminLoginPage() {
   return (
     <div className="min-h-screen bg-slate-950 flex items-center justify-center px-4">
       <div className="w-full max-w-sm">
-        {/* Header */}
         <div className="text-center mb-8">
           <div className="inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-green-500 text-white font-bold text-2xl mb-4 shadow-lg shadow-green-500/20">
             A
@@ -97,33 +58,6 @@ export default function AdminLoginPage() {
           <p className="text-slate-400 text-sm mt-1">Super-admin access only</p>
         </div>
 
-        {/* Mode toggle */}
-        <div className="flex rounded-xl border border-slate-700 bg-slate-800 p-1 mb-5">
-          <button
-            type="button"
-            onClick={() => { setMode('signin'); setError(''); formik.resetForm() }}
-            className={`flex-1 py-2 text-sm font-medium rounded-lg transition-all ${
-              !isSignUp
-                ? 'bg-slate-700 text-white shadow-sm'
-                : 'text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            Sign in
-          </button>
-          <button
-            type="button"
-            onClick={() => { setMode('signup'); setError(''); formik.resetForm() }}
-            className={`flex-1 py-2 text-sm font-medium rounded-lg transition-all ${
-              isSignUp
-                ? 'bg-slate-700 text-white shadow-sm'
-                : 'text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            Create account
-          </button>
-        </div>
-
-        {/* Form */}
         <div className="bg-slate-800/60 rounded-2xl border border-slate-700 p-6 backdrop-blur">
           {error && (
             <div className="mb-4 px-3 py-2.5 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 text-sm">
@@ -152,7 +86,7 @@ export default function AdminLoginPage() {
                 />
               </div>
               {formik.touched.phone && formik.errors.phone && (
-                <p className="text-red-400 text-xs mt-1">{formik.errors.phone as string}</p>
+                <p className="text-red-400 text-xs mt-1">{formik.errors.phone}</p>
               )}
             </div>
 
@@ -161,7 +95,7 @@ export default function AdminLoginPage() {
               <input
                 name="password"
                 type="password"
-                autoComplete={isSignUp ? 'new-password' : 'current-password'}
+                autoComplete="current-password"
                 placeholder="••••••••"
                 value={formik.values.password}
                 onChange={formik.handleChange}
@@ -169,39 +103,16 @@ export default function AdminLoginPage() {
                 className="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2.5 text-white placeholder-slate-500 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
               />
               {formik.touched.password && formik.errors.password && (
-                <p className="text-red-400 text-xs mt-1">{formik.errors.password as string}</p>
+                <p className="text-red-400 text-xs mt-1">{formik.errors.password}</p>
               )}
             </div>
-
-            {isSignUp && (
-              <div>
-                <label className="block text-sm font-medium text-slate-300 mb-1.5">
-                  Confirm password
-                </label>
-                <input
-                  name="confirmPassword"
-                  type="password"
-                  autoComplete="new-password"
-                  placeholder="••••••••"
-                  value={formik.values.confirmPassword}
-                  onChange={formik.handleChange}
-                  onBlur={formik.handleBlur}
-                  className="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2.5 text-white placeholder-slate-500 text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                />
-                {formik.touched.confirmPassword && formik.errors.confirmPassword && (
-                  <p className="text-red-400 text-xs mt-1">{formik.errors.confirmPassword as string}</p>
-                )}
-              </div>
-            )}
 
             <button
               type="submit"
               disabled={formik.isSubmitting}
               className="w-full py-2.5 bg-green-600 hover:bg-green-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold rounded-lg text-sm transition-colors mt-2"
             >
-              {formik.isSubmitting
-                ? isSignUp ? 'Creating account…' : 'Signing in…'
-                : isSignUp ? 'Create account' : 'Sign in'}
+              {formik.isSubmitting ? 'Signing in…' : 'Sign in'}
             </button>
           </form>
         </div>
