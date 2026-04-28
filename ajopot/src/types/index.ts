@@ -79,5 +79,6 @@ export interface Profile {
   plan: SubscriptionPlan
   is_pro: boolean
   referral_code: string
+  role: 'user' | 'super_admin'
   created_at: string
 }

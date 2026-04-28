@@ -195,6 +195,12 @@ export default function LoginPage() {
         <p className="mt-6 text-center text-xs text-slate-400">
           By continuing you agree to our terms and privacy policy.
         </p>
+        <p className="mt-3 text-center text-xs text-slate-400">
+          Platform admin?{' '}
+          <a href="/admin/login" className="text-green-600 hover:text-green-500 transition-colors">
+            Admin login →
+          </a>
+        </p>
       </div>
     </div>
   )
