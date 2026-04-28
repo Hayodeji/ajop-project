@@ -37,7 +37,6 @@ export default function AdminLoginPage() {
   const isSignUp = mode === 'signup'
 
   const formik = useFormik({
-    key: mode,
     initialValues: { phone: '', password: '', confirmPassword: '' },
     validationSchema: isSignUp ? signUpSchema : signInSchema,
     onSubmit: async (values, { setSubmitting }) => {
@@ -84,7 +83,7 @@ export default function AdminLoginPage() {
         setSubmitting(false)
       }
     },
-  } as any)
+  })
 
   return (
     <div className="min-h-screen bg-slate-950 flex items-center justify-center px-4">
@@ -102,7 +101,7 @@ export default function AdminLoginPage() {
         <div className="flex rounded-xl border border-slate-700 bg-slate-800 p-1 mb-5">
           <button
             type="button"
-            onClick={() => { setMode('signin'); setError('') }}
+            onClick={() => { setMode('signin'); setError(''); formik.resetForm() }}
             className={`flex-1 py-2 text-sm font-medium rounded-lg transition-all ${
               !isSignUp
                 ? 'bg-slate-700 text-white shadow-sm'
@@ -113,7 +112,7 @@ export default function AdminLoginPage() {
           </button>
           <button
             type="button"
-            onClick={() => { setMode('signup'); setError('') }}
+            onClick={() => { setMode('signup'); setError(''); formik.resetForm() }}
             className={`flex-1 py-2 text-sm font-medium rounded-lg transition-all ${
               isSignUp
                 ? 'bg-slate-700 text-white shadow-sm'
