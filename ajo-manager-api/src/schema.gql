@@ -145,6 +145,7 @@ type Payout {
   cycle_number: Int!
   group_id: ID!
   id: ID!
+  member: Member
   member_id: ID!
 }
 

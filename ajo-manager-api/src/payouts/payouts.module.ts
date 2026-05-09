@@ -5,8 +5,10 @@ import { PayoutsService } from './payouts.service'
 import { PayoutsResolver } from './payouts.resolver'
 import { PayoutsRepo } from './payouts.repo'
 
+import { MembersModule } from '../members/members.module'
+
 @Module({
-  imports: [AuthModule, GroupsModule],
+  imports: [AuthModule, GroupsModule, MembersModule],
   providers: [PayoutsService, PayoutsResolver, PayoutsRepo],
   exports: [PayoutsService],
 })

@@ -236,14 +236,14 @@ const GroupDetailPage = () => {
                 <p className="text-gray-400 text-sm text-center py-8">No payouts recorded</p>
               )}
               {payouts?.map((p) => {
-                const memberInfo = (p as any).group_members
+                const memberInfo = p.member
                 return (
                   <Card key={p.id} className="p-4">
                     <div className="flex items-center justify-between">
                       <div>
                         <div className="font-medium text-gray-900">{memberInfo?.name ?? 'Unknown'}</div>
                         <div className="text-sm text-gray-500">
-                          Cycle #{p.cycle_number} · {formatDate(p.paid_out_at)}
+                          Cycle #{p.cycle_number} · {formatDate(p.created_at)}
                         </div>
                       </div>
                       <div className="text-right">

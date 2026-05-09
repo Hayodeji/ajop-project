@@ -39,8 +39,9 @@ export interface Payout {
   member_id: string
   cycle_number: number
   amount: number
-  paid_out_at: string
+  created_at: string
   receipt_url: string | null
+  member?: { name: string; phone: string }
 }
 
 export interface ApiResponse<T> {

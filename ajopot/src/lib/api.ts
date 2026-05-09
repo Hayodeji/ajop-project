@@ -235,7 +235,10 @@ export const markContribution = (groupId: string, data: { memberId: string; cycl
 export const getPayouts = (groupId: string) =>
   gql<Payout[]>(`
     query Payouts($groupId: ID!) {
-      payouts(groupId: $groupId) { id member_id cycle_number amount created_at }
+      payouts(groupId: $groupId) { 
+        id member_id cycle_number amount created_at receipt_url
+        member { name phone }
+      }
     }
   `, { groupId })
 
