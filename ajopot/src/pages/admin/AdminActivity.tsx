@@ -11,7 +11,7 @@ const COLORS: Record<string, string> = {
   subscription: 'bg-amber-500/10 border-amber-500/20 text-amber-400',
 }
 
-export default function AdminActivity() {
+const AdminActivity = () => {
   const { data: activity, isLoading } = useQuery({ queryKey: ['admin-activity'], queryFn: adminGetActivity })
 
   if (isLoading) return <div className="flex justify-center py-20"><Spinner size="lg" /></div>
@@ -41,3 +41,6 @@ export default function AdminActivity() {
     </div>
   )
 }
+
+
+export default AdminActivity;

@@ -6,134 +6,105 @@ import {
   NotFoundException,
 } from '@nestjs/common'
 import { randomBytes } from 'crypto'
-import { SupabaseService } from '../supabase/supabase.service'
 import { SubscriptionsService } from '../subscriptions/subscriptions.service'
-import { PLAN_GROUP_LIMITS } from '../subscriptions/subscriptions.types'
-import { CreateGroupDto } from './dto/create-group.dto'
-import { UpdateGroupDto } from './dto/update-group.dto'
-import type { Group } from './group.types'
-
-const TABLE = 'groups'
+import { PLAN_GROUP_LIMITS } from '../subscriptions/subscriptions.schema'
+import { GroupsRepo } from './groups.repo'
+import { CreateGroupInput, UpdateGroupInput } from './groups.dto'
+import { Group } from './groups.schema'
 
 @Injectable()
 export class GroupsService {
   private readonly logger = new Logger(GroupsService.name)
 
   constructor(
-    private readonly supabase: SupabaseService,
+    private readonly groupsRepo: GroupsRepo,
     private readonly subscriptions: SubscriptionsService,
   ) {}
 
-  async create(adminId: string, dto: CreateGroupDto): Promise<Group> {
+  async create(adminId: string, input: CreateGroupInput): Promise<Group> {
     const plan = await this.subscriptions.getUserPlan(adminId)
     const groupLimit = PLAN_GROUP_LIMITS[plan]
-    const { count } = await this.supabase
-      .getAdminClient()
-      .from('groups')
-      .select('id', { count: 'exact', head: true })
-      .eq('admin_id', adminId)
-    if ((count ?? 0) >= groupLimit) {
+    
+    const count = await this.groupsRepo.countByAdminId(adminId)
+    
+    if (count >= groupLimit) {
       throw new ForbiddenException(
-        `Your ${plan} plan allows a maximum of ${groupLimit} group${groupLimit === 1 ? '' : 's'}. Upgrade to create more.`,
+        `Your ${plan === 'basic' ? 'Basic' : 'Smart'} plan supports ${groupLimit} group${groupLimit === 1 ? '' : 's'}. Upgrade to ${plan === 'basic' ? 'Smart' : 'Pro'} for ${plan === 'basic' ? 'up to 5 groups' : 'unlimited groups'}.`,
       )
     }
 
     const publicToken = randomBytes(16).toString('base64url')
 
-    const { data, error } = await this.supabase
-      .getAdminClient()
-      .from(TABLE)
-      .insert({
-        admin_id: adminId,
-        name: dto.name,
-        contribution_amount: dto.contribution_amount,
-        frequency: dto.frequency,
-        member_count: dto.member_count,
+    try {
+      return await this.groupsRepo.create(adminId, {
+        ...input,
         public_token: publicToken,
       })
-      .select()
-      .single()
-
-    if (error || !data) {
-      this.logger.error(`Create group failed: ${error?.message}`)
+    } catch (error) {
+      this.logger.error(`Create group failed: ${error.message}`)
       throw new InternalServerErrorException('Could not create the group.')
     }
-
-    return data as Group
   }
 
   async findAllForAdmin(adminId: string): Promise<Group[]> {
-    const { data, error } = await this.supabase
-      .getAdminClient()
-      .from(TABLE)
-      .select('*')
-      .eq('admin_id', adminId)
-      .order('created_at', { ascending: false })
-
-    if (error) {
+    try {
+      return await this.groupsRepo.findAll(adminId)
+    } catch (error) {
       this.logger.error(`List groups failed: ${error.message}`)
       throw new InternalServerErrorException('Could not load your groups.')
     }
-
-    return (data ?? []) as Group[]
   }
 
   async findOne(adminId: string, id: string): Promise<Group> {
-    const { data, error } = await this.supabase
-      .getAdminClient()
-      .from(TABLE)
-      .select('*')
-      .eq('id', id)
-      .eq('admin_id', adminId)
-      .maybeSingle()
-
-    if (error) {
+    let group: Group | null
+    try {
+      group = await this.groupsRepo.findById(adminId, id)
+    } catch (error) {
       this.logger.error(`Fetch group failed: ${error.message}`)
       throw new InternalServerErrorException('Could not load that group.')
     }
 
-    if (!data) {
+    if (!group) {
       throw new NotFoundException('That group was not found.')
     }
 
-    return data as Group
+    try {
+      const members = await this.groupsRepo.getActiveMembers(id)
+      group.rotation_schedule = members.map(m => ({
+        position: m.payout_position,
+        member_name: m.name,
+        collects_on_cycle: m.payout_position,
+      }))
+    } catch (error) {
+      this.logger.error(`Fetch group members failed: ${error.message}`)
+      // Don't fail the whole request if schedule fails
+    }
+
+    return group
   }
 
   async update(
     adminId: string,
     id: string,
-    dto: UpdateGroupDto,
+    input: UpdateGroupInput,
   ): Promise<Group> {
     await this.findOne(adminId, id)
 
-    const { data, error } = await this.supabase
-      .getAdminClient()
-      .from(TABLE)
-      .update(dto)
-      .eq('id', id)
-      .eq('admin_id', adminId)
-      .select()
-      .single()
-
-    if (error || !data) {
-      this.logger.error(`Update group failed: ${error?.message}`)
+    try {
+      return await this.groupsRepo.update(adminId, id, input)
+    } catch (error) {
+      this.logger.error(`Update group failed: ${error.message}`)
       throw new InternalServerErrorException('Could not update the group.')
     }
-
-    return data as Group
   }
 
-  async remove(adminId: string, id: string): Promise<void> {
+  async remove(adminId: string, id: string): Promise<boolean> {
     await this.findOne(adminId, id)
 
-    const { error } = await this.supabase
-      .getAdminClient()
-      .from(TABLE)
-      .delete()
-      .eq('id', id)
-      .eq('admin_id', adminId)
-
-    if (error) {
+    try {
+      await this.groupsRepo.delete(adminId, id)
+      return true
+    } catch (error) {
       this.logger.error(`Delete group failed: ${error.message}`)
       throw new InternalServerErrorException('Could not delete the group.')
     }

@@ -7,7 +7,7 @@ import { Card } from '@/components/ui/Card'
 import { formatKobo, formatDate } from '@/lib/utils'
 import toast from 'react-hot-toast'
 
-export default function AdminUserDetail() {
+const AdminUserDetail = () => {
   const { userId } = useParams<{ userId: string }>()
   const qc = useQueryClient()
 
@@ -99,3 +99,6 @@ export default function AdminUserDetail() {
     </div>
   )
 }
+
+
+export default AdminUserDetail;

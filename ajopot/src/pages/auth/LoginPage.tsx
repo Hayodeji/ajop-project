@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Formik, Form } from 'formik'
 import * as Yup from 'yup'
 import toast from 'react-hot-toast'
-import { useNavigate, Navigate } from 'react-router-dom'
+import { useNavigate, Navigate, Link } from 'react-router-dom'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 import { supabase } from '@/lib/supabase'
@@ -37,7 +37,7 @@ const signUpSchema = Yup.object({
     .required('Confirm your password'),
 })
 
-export default function LoginPage() {
+const LoginPage = () => {
   const [mode, setMode] = useState<Mode>('signin')
   const navigate = useNavigate()
   const session = useAuthStore((s) => s.session)
@@ -47,45 +47,51 @@ export default function LoginPage() {
   const isSignUp = mode === 'signup'
 
   return (
-    <div className="min-h-screen flex items-center justify-center px-4 py-10 bg-gray-50">
-      <div className="w-full max-w-md">
+    <div className="min-h-screen flex items-center justify-center relative overflow-hidden bg-slate-50">
+      {/* Background decoration */}
+      <div className="absolute top-0 left-0 w-full h-full overflow-hidden -z-10">
+        <div className="absolute -top-[10%] -left-[10%] w-[40%] h-[40%] rounded-full bg-green-100/50 blur-3xl animate-pulse" />
+        <div className="absolute -bottom-[10%] -right-[10%] w-[40%] h-[40%] rounded-full bg-blue-100/50 blur-3xl animate-pulse delay-700" />
+      </div>
+
+      <div className="w-full max-w-md px-4">
         <div className="mb-8 text-center">
-          <div className="inline-flex h-12 w-12 items-center justify-center rounded-xl bg-green-600 text-white font-bold text-xl mb-4">
+          <div className="inline-flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-green-500 to-green-600 text-white font-bold text-2xl mb-6 shadow-xl shadow-green-500/20">
             A
           </div>
-          <h1 className="text-2xl font-bold text-slate-900">Welcome to AjoPot</h1>
-          <p className="mt-2 text-sm text-slate-500">
+          <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">AjoPot</h1>
+          <p className="mt-3 text-slate-500 font-medium">
             {isSignUp
-              ? 'Create your account to get started'
-              : 'Sign in to manage your savings groups'}
+              ? 'Join thousands of smart savers today'
+              : 'Sign in to your secure dashboard'}
           </p>
         </div>
 
-        {/* Mode toggle */}
-        <div className="flex rounded-xl border border-slate-200 bg-slate-100 p-1 mb-6">
-          <button
-            onClick={() => setMode('signin')}
-            className={`flex-1 py-2 text-sm font-medium rounded-lg transition-all ${
-              !isSignUp
-                ? 'bg-white shadow-sm text-slate-900'
-                : 'text-slate-500 hover:text-slate-700'
-            }`}
-          >
-            Sign in
-          </button>
-          <button
-            onClick={() => setMode('signup')}
-            className={`flex-1 py-2 text-sm font-medium rounded-lg transition-all ${
-              isSignUp
-                ? 'bg-white shadow-sm text-slate-900'
-                : 'text-slate-500 hover:text-slate-700'
-            }`}
-          >
-            Create account
-          </button>
-        </div>
+        <div className="bg-white/80 backdrop-blur-xl rounded-3xl border border-white shadow-2xl shadow-slate-200/50 p-6 sm:p-10">
+          {/* Mode toggle */}
+          <div className="flex rounded-2xl border border-slate-100 bg-slate-50/50 p-1.5 mb-8">
+            <button
+              onClick={() => setMode('signin')}
+              className={`flex-1 py-2.5 text-sm font-semibold rounded-xl transition-all duration-300 ${
+                !isSignUp
+                  ? 'bg-white shadow-md text-slate-900'
+                  : 'text-slate-500 hover:text-slate-700'
+              }`}
+            >
+              Sign in
+            </button>
+            <button
+              onClick={() => setMode('signup')}
+              className={`flex-1 py-2.5 text-sm font-semibold rounded-xl transition-all duration-300 ${
+                isSignUp
+                  ? 'bg-white shadow-md text-slate-900'
+                  : 'text-slate-500 hover:text-slate-700'
+              }`}
+            >
+              Create account
+            </button>
+          </div>
 
-        <div className="rounded-2xl bg-white border border-slate-200 shadow-sm p-6 sm:p-8">
           <Formik
             key={mode}
             initialValues={{ phone: '', password: '', confirmPassword: '' }}
@@ -100,7 +106,7 @@ export default function LoginPage() {
                     password: values.password,
                   })
                   if (error) throw new Error(error.message)
-                  toast.success('Account created! Tell us your name.')
+                  toast.success('Account created! Let\'s finish your profile.')
                   navigate('/signup', { replace: true })
                 } else {
                   const { error } = await supabase.auth.signInWithPassword({
@@ -109,24 +115,24 @@ export default function LoginPage() {
                   })
                   if (error) throw new Error(error.message)
 
-                  // Check super-admin access first
+                  // Check if super-admin
                   try {
                     const { adminGetStats } = await import('@/lib/adminApi')
                     await adminGetStats()
-                    toast.success('Welcome, Super Admin')
+                    toast.success('Welcome back, Admin')
                     navigate('/admin/dashboard', { replace: true })
                     return
-                  } catch {
-                    // Not a super-admin, continue normal flow
+                  } catch (err) {
+                    // Not an admin, continue to user flow
                   }
 
-                  // Check if profile is complete
+                  // Regular user flow
                   try {
                     const profile = await getProfile()
                     if (!profile) {
                       navigate('/signup', { replace: true })
                     } else {
-                      toast.success('Welcome back!')
+                      toast.success('Welcome back to AjoPot!')
                       navigate('/dashboard', { replace: true })
                     }
                   } catch {
@@ -135,7 +141,7 @@ export default function LoginPage() {
                 }
               } catch (err) {
                 const msg =
-                  err instanceof Error ? err.message : 'Something went wrong. Try again.'
+                  err instanceof Error ? err.message : 'Login failed. Please check your details.'
                 toast.error(msg)
               } finally {
                 setSubmitting(false)
@@ -143,7 +149,7 @@ export default function LoginPage() {
             }}
           >
             {({ values, errors, touched, handleChange, handleBlur, isSubmitting }) => (
-              <Form className="space-y-4">
+              <Form className="space-y-5">
                 <Input
                   label="Phone number"
                   name="phone"
@@ -151,57 +157,74 @@ export default function LoginPage() {
                   autoComplete="tel"
                   placeholder="0801 234 5678"
                   leftAdornment={
-                    <>
-                      🇳🇬 <span className="ml-1">+234</span>
-                    </>
+                    <div className="flex items-center text-slate-400 font-medium border-r border-slate-200 pr-3 mr-3">
+                      <span className="text-lg mr-2">🇳🇬</span>
+                      <span className="text-sm">+234</span>
+                    </div>
                   }
                   value={values.phone}
                   onChange={handleChange}
                   onBlur={handleBlur}
                   error={touched.phone ? errors.phone : undefined}
                 />
-                <Input
-                  label="Password"
-                  name="password"
-                  type="password"
-                  autoComplete={isSignUp ? 'new-password' : 'current-password'}
-                  placeholder="At least 8 characters"
-                  value={values.password}
-                  onChange={handleChange}
-                  onBlur={handleBlur}
-                  error={touched.password ? errors.password : undefined}
-                />
+                <div>
+                  <Input
+                    label="Password"
+                    name="password"
+                    type="password"
+                    autoComplete={isSignUp ? 'new-password' : 'current-password'}
+                    placeholder="••••••••"
+                    value={values.password}
+                    onChange={handleChange}
+                    onBlur={handleBlur}
+                    error={touched.password ? errors.password : undefined}
+                  />
+                  {!isSignUp && (
+                    <div className="mt-2 text-right">
+                      <Link
+                        to="/forgot-password"
+                        className="text-xs font-semibold text-green-600 hover:text-green-700 transition-colors"
+                      >
+                        Forgot password?
+                      </Link>
+                    </div>
+                  )}
+                </div>
                 {isSignUp && (
                   <Input
                     label="Confirm password"
                     name="confirmPassword"
                     type="password"
                     autoComplete="new-password"
-                    placeholder="Repeat your password"
+                    placeholder="••••••••"
                     value={values.confirmPassword}
                     onChange={handleChange}
                     onBlur={handleBlur}
                     error={touched.confirmPassword ? errors.confirmPassword : undefined}
                   />
                 )}
-                <Button type="submit" loading={isSubmitting} fullWidth size="lg" className="mt-2">
-                  {isSignUp ? 'Create account' : 'Sign in'}
+                <Button 
+                  type="submit" 
+                  loading={isSubmitting} 
+                  fullWidth 
+                  size="lg" 
+                  className="mt-4 bg-gradient-to-r from-green-600 to-green-500 hover:from-green-500 hover:to-green-400 border-none shadow-lg shadow-green-500/25 py-6 rounded-2xl text-base font-bold"
+                >
+                  {isSignUp ? 'Get Started' : 'Sign In'}
                 </Button>
               </Form>
             )}
           </Formik>
         </div>
 
-        <p className="mt-6 text-center text-xs text-slate-400">
-          By continuing you agree to our terms and privacy policy.
-        </p>
-        <p className="mt-3 text-center text-xs text-slate-400">
-          Platform admin?{' '}
-          <a href="/admin/login" className="text-green-600 hover:text-green-500 transition-colors">
-            Admin login →
-          </a>
+        <p className="mt-8 text-center text-xs text-slate-400 font-medium px-10 leading-relaxed">
+          Securely encrypted by Supabase Auth. By continuing you agree to our 
+          <a href="#" className="text-slate-600 hover:underline mx-1">Terms</a> and 
+          <a href="#" className="text-slate-600 hover:underline ml-1">Privacy Policy</a>.
         </p>
       </div>
     </div>
   )
 }
+
+export default LoginPage;

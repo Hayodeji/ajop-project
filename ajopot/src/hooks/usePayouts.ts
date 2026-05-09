@@ -10,6 +10,6 @@ export const useRecordPayout = (groupId: string) => {
   return useMutation({
     mutationFn: (data: { memberId: string; cycleNumber: number; amount: number }) => recordPayout(groupId, data),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['payouts', groupId] }); toast.success('Payout recorded') },
-    onError: (e: any) => toast.error(e?.response?.data?.message ?? 'Failed to record payout'),
+    onError: (e: any) => toast.error(e.message || 'Failed to record payout'),
   })
 }

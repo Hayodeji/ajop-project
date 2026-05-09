@@ -7,9 +7,10 @@ const NAV = [
   { to: '/dashboard', label: 'Dashboard' },
   { to: '/groups', label: 'Groups' },
   { to: '/settings', label: 'Settings' },
+  { to: '/faq', label: 'FAQ' },
 ]
 
-export default function AppShell() {
+const AppShell = () => {
   const logout = useAuthStore((s) => s.logout)
   const user = useAuthStore((s) => s.user)
 
@@ -77,3 +78,6 @@ export default function AppShell() {
     </div>
   )
 }
+
+
+export default AppShell;

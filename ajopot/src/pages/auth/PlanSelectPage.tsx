@@ -59,7 +59,7 @@ const PLANS: {
   },
 ]
 
-export default function PlanSelectPage() {
+const PlanSelectPage = () => {
   const [loading, setLoading] = useState<SubscriptionPlan | null>(null)
 
   const handleSelect = async (plan: SubscriptionPlan) => {
@@ -141,3 +141,6 @@ export default function PlanSelectPage() {
     </div>
   )
 }
+
+
+export default PlanSelectPage;

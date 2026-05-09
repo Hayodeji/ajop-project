@@ -18,6 +18,7 @@ const baseURL = import.meta.env.VITE_API_URL ?? 'http://localhost:3000/api'
 export const api = axios.create({
   baseURL,
   headers: { 'Content-Type': 'application/json' },
+  timeout: 30000,
 })
 
 api.interceptors.request.use(async (config) => {
@@ -38,76 +39,228 @@ export function extractErrorMessage(err: unknown): string {
   return 'Something went wrong.'
 }
 
-export async function unwrap<T>(promise: Promise<{ data: ApiResponse<T> }>): Promise<T> {
-  const response = await promise
-  return response.data.data
+// GraphQL Helper
+const gql = async <T>(query: string, variables?: any): Promise<T> => {
+  const response = await api.post('/graphql', { query, variables })
+  if (response.data.errors) {
+    const gqlError = response.data.errors[0]
+    // NestJS wraps HTTP exceptions so the real message is in extensions.response.message
+    // e.g. ConflictException → extensions.response.message: "A member with this phone number..."
+    // The top-level message is just "Conflict" or "Forbidden" which is not user-friendly
+    const message =
+      gqlError?.extensions?.response?.message ||
+      gqlError?.extensions?.originalError?.message ||
+      gqlError?.message ||
+      'Something went wrong.'
+    throw new Error(Array.isArray(message) ? message.join(', ') : message)
+  }
+  // The response from NestJS GraphQL is usually { data: { operationName: T } }
+  // We return the first key of the data object
+  const keys = Object.keys(response.data.data)
+  return response.data.data[keys[0]]
 }
 
 // Auth
 export const checkPhone = (phone: string) =>
-  api.post<ApiResponse<{ isNewUser: boolean }>>('/auth/check-phone', { phone }).then(r => r.data.data)
+  gql<{ success: boolean; message: string }>(`
+    mutation CheckPhone($input: CheckPhoneInput!) {
+      checkPhone(input: $input) { success message }
+    }
+  `, { input: { phone } })
 
-export const completeProfile = (data: { name: string; referralCode?: string }) =>
-  api.post<ApiResponse<Profile>>('/auth/complete-profile', data).then(r => r.data.data)
+export const completeProfile = (data: { name: string; email?: string; referralCode?: string }) =>
+  gql<Profile>(`
+    mutation CompleteProfile($input: CompleteProfileInput!) {
+      completeProfile(input: $input) { id name email phone created_at }
+    }
+  `, { input: data })
 
 export const getProfile = () =>
-  api.get<ApiResponse<Profile>>('/auth/profile').then(r => r.data.data)
+  gql<Profile>(`
+    query GetProfile {
+      profile { id name email phone created_at }
+    }
+  `)
+
+export const forgotPassword = (data: { email?: string; phone?: string }) =>
+  gql<{ success: boolean; message: string }>(`
+    mutation ForgotPassword($input: ForgotPasswordInput!) {
+      forgotPassword(input: $input) { success message }
+    }
+  `, { input: data })
+
+export const resetPassword = (data: { password: string }) =>
+  gql<{ success: boolean; message: string }>(`
+    mutation ResetPassword($input: ResetPasswordInput!) {
+      resetPassword(input: $input) { success message }
+    }
+  `, { input: data })
 
 // Subscriptions
 export const getMySubscription = () =>
-  api.get<ApiResponse<Subscription | null>>('/subscriptions/me').then(r => r.data.data)
+  gql<Subscription | null>(`
+    query MySubscription {
+      mySubscription { id plan status expires_at }
+    }
+  `)
 
 export const selectPlan = (plan: SubscriptionPlan) =>
-  api.post<ApiResponse<Subscription>>('/subscriptions/select', { plan }).then(r => r.data.data)
+  gql<Subscription>(`
+    mutation SelectPlan($input: SelectPlanInput!) {
+      selectPlan(input: $input) { id plan status expires_at }
+    }
+  `, { input: { plan } })
 
 export const initiatePayment = (plan: SubscriptionPlan) =>
-  api.post<ApiResponse<{ authorization_url: string; access_code: string; reference: string }>>('/subscriptions/pay', { plan }).then(r => r.data.data)
+  gql<{ authorization_url: string; reference: string }>(`
+    mutation InitiatePayment($input: InitiatePaymentInput!) {
+      initiatePayment(input: $input) { authorization_url reference }
+    }
+  `, { input: { plan } })
 
 export const verifyPayment = (reference: string) =>
-  api.post<ApiResponse<{ plan: string; status: string }>>('/subscriptions/verify', { reference }).then(r => r.data.data)
+  gql<Subscription>(`
+    mutation VerifyPayment($input: VerifyPaymentInput!) {
+      verifyPayment(input: $input) { id plan status expires_at }
+    }
+  `, { input: { reference } })
 
 // Groups
 export const getGroups = () =>
-  api.get<ApiResponse<Group[]>>('/groups').then(r => r.data.data)
+  gql<Group[]>(`
+    query Groups {
+      groups { id name contribution_amount frequency member_count current_cycle created_at }
+    }
+  `)
 
 export const createGroup = (data: { name: string; contribution_amount: number; frequency: string; member_count: number }) =>
-  api.post<ApiResponse<Group>>('/groups', data).then(r => r.data.data)
+  gql<Group>(`
+    mutation CreateGroup($input: CreateGroupInput!) {
+      createGroup(input: $input) { id name }
+    }
+  `, { input: { ...data, frequency: data.frequency.toUpperCase() } })
 
 export const getGroup = (id: string) =>
-  api.get<ApiResponse<Group>>(`/groups/${id}`).then(r => r.data.data)
+  gql<Group>(`
+    query Group($id: String!) {
+      group(id: $id) { 
+        id name contribution_amount frequency member_count current_cycle created_at 
+        public_token
+        rotation_schedule { position member_name collects_on_cycle }
+      }
+    }
+  `, { id })
 
-export const updateGroup = (id: string, data: Partial<Group>) =>
-  api.patch<ApiResponse<Group>>(`/groups/${id}`, data).then(r => r.data.data)
+export const updateGroup = (id: string, data: Partial<Group>) => {
+  const payload = { ...data, id }
+  if (payload.frequency) {
+    payload.frequency = payload.frequency.toUpperCase() as any
+  }
+  return gql<Group>(`
+    mutation UpdateGroup($input: UpdateGroupInput!) {
+      updateGroup(input: $input) { id name }
+    }
+  `, { input: payload })
+}
 
 export const deleteGroup = (id: string) =>
-  api.delete(`/groups/${id}`)
+  gql<boolean>(`
+    mutation DeleteGroup($id: String!) {
+      removeGroup(id: $id)
+    }
+  `, { id })
 
 // Members
 export const getMembers = (groupId: string) =>
-  api.get<ApiResponse<GroupMember[]>>(`/groups/${groupId}/members`).then(r => r.data.data)
+  gql<GroupMember[]>(`
+    query Members($groupId: ID!) {
+      members(groupId: $groupId) { id name phone payout_position is_active }
+    }
+  `, { groupId })
 
 export const inviteMember = (groupId: string, data: { name: string; phone: string; payoutPosition: number }) =>
-  api.post<ApiResponse<GroupMember>>(`/groups/${groupId}/members`, data).then(r => r.data.data)
+  gql<GroupMember>(`
+    mutation InviteMember($input: CreateMemberInput!) {
+      inviteMember(input: $input) { id name }
+    }
+  `, { 
+    input: { 
+      name: data.name,
+      phone: data.phone,
+      group_id: groupId, 
+      payout_position: data.payoutPosition 
+    } 
+  })
 
 export const removeMember = (groupId: string, memberId: string) =>
-  api.delete(`/groups/${groupId}/members/${memberId}`)
+  gql<boolean>(`
+    mutation RemoveMember($id: String!) {
+      removeMember(id: $id)
+    }
+  `, { id: memberId })
+
+export const updateMember = (data: { id: string; name?: string; phone?: string; payout_position?: number }) =>
+  gql<GroupMember>(`
+    mutation UpdateMember($input: UpdateMemberInput!) {
+      updateMember(input: $input) { id name phone payout_position }
+    }
+  `, { input: data })
 
 // Contributions
-export const getContributions = (groupId: string, from?: string, to?: string) => {
-  const params = from && to ? `?from=${from}&to=${to}` : ''
-  return api.get<ApiResponse<(Contribution & { group_members: Pick<GroupMember, 'name' | 'phone' | 'payout_position'> })[]>>(`/groups/${groupId}/contributions${params}`).then(r => r.data.data)
-}
+export const getContributions = (groupId: string, from?: string, to?: string) =>
+  gql<Contribution[]>(`
+    query Contributions($groupId: ID!, $fromDate: String, $toDate: String) {
+      contributions(groupId: $groupId, fromDate: $fromDate, toDate: $toDate) { 
+        id member_id cycle_number status paid_at due_date
+        member { name phone }
+      }
+    }
+  `, { groupId, fromDate: from, toDate: to })
 
 export const markContribution = (groupId: string, data: { memberId: string; cycleNumber: number; status: ContributionStatus }) =>
-  api.post<ApiResponse<Contribution>>(`/groups/${groupId}/contributions`, data).then(r => r.data.data)
+  gql<Contribution>(`
+    mutation MarkContribution($input: CreateContributionInput!) {
+      markContribution(input: $input) { id status }
+    }
+  `, { 
+    input: { 
+      group_id: groupId, 
+      member_id: data.memberId, 
+      cycle_number: data.cycleNumber, 
+      status: data.status 
+    } 
+  })
 
 // Payouts
 export const getPayouts = (groupId: string) =>
-  api.get<ApiResponse<(Payout & { group_members: Pick<GroupMember, 'name' | 'phone' | 'payout_position'> })[]>>(`/groups/${groupId}/payouts`).then(r => r.data.data)
+  gql<Payout[]>(`
+    query Payouts($groupId: ID!) {
+      payouts(groupId: $groupId) { id member_id cycle_number amount created_at }
+    }
+  `, { groupId })
 
 export const recordPayout = (groupId: string, data: { memberId: string; cycleNumber: number; amount: number }) =>
-  api.post<ApiResponse<Payout>>(`/groups/${groupId}/payouts`, data).then(r => r.data.data)
+  gql<Payout>(`
+    mutation RecordPayout($input: CreatePayoutInput!) {
+      recordPayout(input: $input) { id amount }
+    }
+  `, { 
+    input: { 
+      group_id: groupId, 
+      member_id: data.memberId, 
+      cycle_number: data.cycleNumber, 
+      amount: data.amount 
+    } 
+  })
 
 // Public
 export const getPublicGroup = (token: string) =>
-  api.get<ApiResponse<{ group: Group; members: Pick<GroupMember, 'id' | 'name' | 'payout_position' | 'is_active'>[]; contributions: Pick<Contribution, 'id' | 'member_id' | 'cycle_number' | 'status' | 'paid_at'>[] }>>(`/public/${token}`).then(r => r.data.data)
+  gql<any>(`
+    query PublicGroup($token: String!) {
+      publicGroup(token: $token) {
+        group { id name contribution_amount frequency member_count current_cycle }
+        members { id name phone payout_position is_active }
+        contributions { id member_id cycle_number status paid_at }
+      }
+    }
+  `, { token })

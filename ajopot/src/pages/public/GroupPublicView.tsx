@@ -12,7 +12,7 @@ const STATUS_TONE: Record<ContributionStatus, 'success' | 'warning' | 'danger'> 
   late: 'danger',
 }
 
-export default function GroupPublicView() {
+const GroupPublicView = () => {
   const { token } = useParams<{ token: string }>()
   const { data, isLoading, error } = useQuery({
     queryKey: ['public-group', token],
@@ -79,7 +79,9 @@ export default function GroupPublicView() {
                       {m.payout_position}
                     </div>
                     <div>
-                      <div className="font-medium text-gray-900 text-sm">{m.name}</div>
+                      <div className="font-medium text-gray-900 text-sm">
+                        {m.name} <span className="text-gray-400 font-normal">({m.phone || 'N/A'})</span>
+                      </div>
                       {contrib?.paid_at && (
                         <div className="text-xs text-gray-400">{formatDate(contrib.paid_at)}</div>
                       )}
@@ -97,3 +99,6 @@ export default function GroupPublicView() {
     </div>
   )
 }
+
+
+export default GroupPublicView;

@@ -1,0 +1,242 @@
+# ------------------------------------------------------
+# THIS FILE WAS AUTOMATICALLY GENERATED (DO NOT MODIFY)
+# ------------------------------------------------------
+
+type AuthResponse {
+  message: String
+  success: Boolean!
+}
+
+input CheckPhoneInput {
+  phone: String!
+}
+
+input CompleteProfileInput {
+  email: String
+  name: String!
+  referralCode: String
+}
+
+type Contribution {
+  created_at: DateTime!
+  cycle_number: Int!
+  due_date: DateTime!
+  group_id: ID!
+  id: ID!
+  marked_by: String
+  member: ContributionMember
+  member_id: ID!
+  paid_at: DateTime
+  status: ContributionStatus!
+}
+
+type ContributionMember {
+  name: String!
+  payout_position: Int
+  phone: String!
+}
+
+enum ContributionStatus {
+  LATE
+  PAID
+  PENDING
+}
+
+input CreateContributionInput {
+  cycle_number: Int!
+  group_id: ID!
+  member_id: ID!
+  status: ContributionStatus!
+}
+
+input CreateGroupInput {
+  contribution_amount: Int!
+  frequency: GroupFrequency!
+  member_count: Int!
+  name: String!
+}
+
+input CreateMemberInput {
+  group_id: ID!
+  name: String!
+  payout_position: Int!
+  phone: String!
+}
+
+input CreatePayoutInput {
+  amount: Int!
+  cycle_number: Int!
+  group_id: ID!
+  member_id: ID!
+}
+
+"""
+A date-time string at UTC, such as 2019-12-03T09:54:33Z, compliant with the date-time format.
+"""
+scalar DateTime
+
+input ForgotPasswordInput {
+  email: String
+  phone: String
+}
+
+type Group {
+  admin_id: ID!
+  contribution_amount: Int!
+  created_at: DateTime!
+  current_cycle: Int!
+  frequency: GroupFrequency!
+  id: ID!
+  late_fee_amount: Int!
+  member_count: Int!
+  name: String!
+  public_token: String!
+  rotation_schedule: [RotationScheduleItem!]
+}
+
+"""The frequency of contributions for a group"""
+enum GroupFrequency {
+  BIWEEKLY
+  MONTHLY
+  WEEKLY
+}
+
+input InitiatePaymentInput {
+  plan: String!
+}
+
+type Member {
+  group_id: ID!
+  id: ID!
+  is_active: Boolean!
+  joined_at: DateTime!
+  name: String!
+  outstanding_fines: Int!
+  payout_position: Int!
+  phone: String!
+}
+
+type Mutation {
+  checkPhone(input: CheckPhoneInput!): AuthResponse!
+  completeProfile(input: CompleteProfileInput!): Profile!
+  createGroup(input: CreateGroupInput!): Group!
+  forgotPassword(input: ForgotPasswordInput!): AuthResponse!
+  initiatePayment(input: InitiatePaymentInput!): PaymentInitiationResponse!
+  inviteMember(input: CreateMemberInput!): Member!
+  markContribution(input: CreateContributionInput!): Contribution!
+  recordPayout(input: CreatePayoutInput!): Payout!
+  removeGroup(id: String!): Boolean!
+  removeMember(id: ID!): Boolean!
+  resetPassword(input: ResetPasswordInput!): AuthResponse!
+  selectPlan(input: SelectPlanInput!): Subscription!
+  updateGroup(input: UpdateGroupInput!): Group!
+  updateMember(input: UpdateMemberInput!): Member!
+  verifyPayment(input: VerifyPaymentInput!): Subscription!
+}
+
+type PaymentInitiationResponse {
+  authorization_url: String!
+  reference: String!
+}
+
+type Payout {
+  amount: Int!
+  created_at: DateTime!
+  cycle_number: Int!
+  group_id: ID!
+  id: ID!
+  member_id: ID!
+}
+
+type Profile {
+  avatar_url: String
+  created_at: DateTime!
+  email: String
+  id: ID!
+  name: String
+  phone: String
+}
+
+type PublicGroupResponse {
+  contributions: [Contribution!]!
+  group: Group!
+  members: [PublicMember!]!
+}
+
+type PublicMember {
+  group_id: ID!
+  id: ID!
+  is_active: Boolean!
+  joined_at: DateTime!
+  name: String!
+  outstanding_fines: Int!
+  payout_position: Int!
+  phone: String!
+}
+
+type Query {
+  contributions(fromDate: String, groupId: ID!, toDate: String): [Contribution!]!
+  group(id: String!): Group!
+  groups: [Group!]!
+  members(groupId: ID!): [Member!]!
+  mySubscription: Subscription
+  payouts(groupId: ID!): [Payout!]!
+  profile: Profile!
+  publicGroup(token: String!): PublicGroupResponse!
+}
+
+input ResetPasswordInput {
+  password: String!
+}
+
+type RotationScheduleItem {
+  collects_on_cycle: Int!
+  member_name: String!
+  position: Int!
+}
+
+input SelectPlanInput {
+  plan: String!
+}
+
+type Subscription {
+  created_at: DateTime!
+  expires_at: DateTime!
+  id: ID!
+  plan: SubscriptionPlan!
+  status: SubscriptionStatus!
+  user_id: ID!
+}
+
+enum SubscriptionPlan {
+  BASIC
+  PRO
+  SMART
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  CANCELLED
+  EXPIRED
+  TRIAL
+}
+
+input UpdateGroupInput {
+  contribution_amount: Int
+  frequency: GroupFrequency
+  id: String!
+  member_count: Int
+  name: String
+}
+
+input UpdateMemberInput {
+  group_id: ID
+  id: ID!
+  name: String
+  payout_position: Int
+  phone: String
+}
+
+input VerifyPaymentInput {
+  reference: String!
+}

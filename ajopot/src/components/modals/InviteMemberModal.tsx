@@ -21,7 +21,7 @@ interface Props {
   memberCount: number
 }
 
-export default function InviteMemberModal({ open, onClose, groupId, memberCount }: Props) {
+const InviteMemberModal = ({ open, onClose, groupId, memberCount }: Props) => {
   const { mutate: invite, isPending } = useInviteMember(groupId)
 
   const formik = useFormik({
@@ -74,3 +74,6 @@ export default function InviteMemberModal({ open, onClose, groupId, memberCount 
     </Modal>
   )
 }
+
+
+export default InviteMemberModal;

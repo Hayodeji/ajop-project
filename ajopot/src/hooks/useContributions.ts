@@ -16,6 +16,6 @@ export const useMarkContribution = (groupId: string) => {
     mutationFn: (data: { memberId: string; cycleNumber: number; status: ContributionStatus }) =>
       markContribution(groupId, data),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['contributions', groupId] }); toast.success('Contribution updated') },
-    onError: (e: any) => toast.error(e?.response?.data?.message ?? 'Failed to update contribution'),
+    onError: (e: any) => toast.error(e.message || 'Failed to update contribution'),
   })
 }

@@ -8,7 +8,7 @@ import { formatDate } from '@/lib/utils'
 const PLAN_TONE: Record<string, any> = { basic: 'neutral', smart: 'info', pro: 'brand' }
 const STATUS_TONE: Record<string, any> = { active: 'success', trial: 'warning', cancelled: 'danger', expired: 'danger' }
 
-export default function AdminSubscriptions() {
+const AdminSubscriptions = () => {
   const [page, setPage] = useState(1)
   const { data, isLoading } = useQuery({
     queryKey: ['admin-subscriptions', page],
@@ -77,3 +77,6 @@ export default function AdminSubscriptions() {
     </div>
   )
 }
+
+
+export default AdminSubscriptions;

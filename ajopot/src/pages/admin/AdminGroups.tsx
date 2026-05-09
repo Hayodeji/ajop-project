@@ -5,7 +5,7 @@ import { adminGetGroups } from '@/lib/adminApi'
 import { Spinner } from '@/components/ui/Spinner'
 import { formatKobo, formatDate } from '@/lib/utils'
 
-export default function AdminGroups() {
+const AdminGroups = () => {
   const [page, setPage] = useState(1)
   const [search, setSearch] = useState('')
 
@@ -72,3 +72,6 @@ export default function AdminGroups() {
     </div>
   )
 }
+
+
+export default AdminGroups;

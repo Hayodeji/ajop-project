@@ -19,7 +19,7 @@ interface Props {
   onClose: () => void
 }
 
-export default function CreateGroupModal({ open, onClose }: Props) {
+const CreateGroupModal = ({ open, onClose }: Props) => {
   const { mutate: create, isPending } = useCreateGroup()
 
   const formik = useFormik({
@@ -89,3 +89,6 @@ export default function CreateGroupModal({ open, onClose }: Props) {
     </Modal>
   )
 }
+
+
+export default CreateGroupModal;

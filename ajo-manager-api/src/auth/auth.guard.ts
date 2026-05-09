@@ -15,7 +15,9 @@ export class SupabaseAuthGuard implements CanActivate {
   constructor(private readonly supabase: SupabaseService) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
-    const request = context.switchToHttp().getRequest<AuthenticatedRequest>()
+    const request = this.getRequest(context)
+    if (!request) return false
+
     const token = this.extractToken(request)
 
     if (!token) {
@@ -29,6 +31,10 @@ export class SupabaseAuthGuard implements CanActivate {
 
     request.user = user
     return true
+  }
+
+  protected getRequest(context: ExecutionContext): AuthenticatedRequest {
+    return context.switchToHttp().getRequest<AuthenticatedRequest>()
   }
 
   private extractToken(request: AuthenticatedRequest): string | null {

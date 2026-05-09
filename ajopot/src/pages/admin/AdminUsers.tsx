@@ -10,7 +10,7 @@ import toast from 'react-hot-toast'
 const PLAN_TONE: Record<string, any> = { basic: 'neutral', smart: 'info', pro: 'brand' }
 const STATUS_TONE: Record<string, any> = { active: 'success', trial: 'warning', cancelled: 'danger', expired: 'danger' }
 
-export default function AdminUsers() {
+const AdminUsers = () => {
   const [page, setPage] = useState(1)
   const [search, setSearch] = useState('')
   const qc = useQueryClient()
@@ -108,3 +108,6 @@ export default function AdminUsers() {
     </div>
   )
 }
+
+
+export default AdminUsers;

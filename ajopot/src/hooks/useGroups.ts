@@ -14,7 +14,7 @@ export const useCreateGroup = () => {
   return useMutation({
     mutationFn: createGroup,
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['groups'] }); toast.success('Group created') },
-    onError: (e: any) => toast.error(e?.response?.data?.message ?? 'Failed to create group'),
+    onError: (e: any) => toast.error(e.message || 'Failed to create group'),
   })
 }
 
@@ -23,7 +23,7 @@ export const useUpdateGroup = (id: string) => {
   return useMutation({
     mutationFn: (data: Partial<Group>) => updateGroup(id, data),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['groups', id] }); toast.success('Group updated') },
-    onError: (e: any) => toast.error(e?.response?.data?.message ?? 'Failed to update group'),
+    onError: (e: any) => toast.error(e.message || 'Failed to update group'),
   })
 }
 
@@ -32,6 +32,6 @@ export const useDeleteGroup = () => {
   return useMutation({
     mutationFn: deleteGroup,
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['groups'] }); toast.success('Group deleted') },
-    onError: (e: any) => toast.error(e?.response?.data?.message ?? 'Failed to delete group'),
+    onError: (e: any) => toast.error(e.message || 'Failed to delete group'),
   })
 }

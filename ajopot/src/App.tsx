@@ -6,7 +6,7 @@ import { supabase } from '@/lib/supabase'
 import { router } from '@/routes'
 import { useAuthStore } from '@/stores/authStore'
 
-export default function App() {
+const App = () => {
   const setSession = useAuthStore((s) => s.setSession)
 
   useEffect(() => {
@@ -23,3 +23,6 @@ export default function App() {
     </QueryClientProvider>
   )
 }
+
+
+export default App;

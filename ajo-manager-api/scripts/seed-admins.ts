@@ -15,24 +15,30 @@ const admin = createClient(supabaseUrl, serviceRoleKey, {
 })
 
 const ADMINS = [
-  { phone: '+2349065543761', password: 'Ajopot_123*#,' },
-  { phone: '+2347033139259', password: 'Ajopot_123*#,' },
+  { phone: '+2349065543761', password: 'AjopotAdmin2024!' },
+  { phone: '+2347033139259', password: 'AjopotAdmin2024!' },
 ]
 
 async function seedAdmins() {
-  console.log('Creating super-admin accounts...\n')
+  console.log('Creating/updating super-admin accounts...\n')
+
+  const { data: { users } } = await admin.auth.admin.listUsers({ perPage: 1000 })
 
   for (const { phone, password } of ADMINS) {
-    const { data, error } = await admin.auth.admin.createUser({
-      phone,
-      password,
-      phone_confirm: true,
-    })
+    const existing = users.find((u) => u.phone === phone || u.phone === phone.replace('+', ''))
 
-    if (error) {
-      console.error(`✗ Failed to create ${phone}:`, error.message)
+    if (existing) {
+      const { error } = await admin.auth.admin.updateUserById(existing.id, { password })
+      if (error) console.error(`✗ Failed to update ${phone}:`, error.message)
+      else console.log(`✓ Password updated for ${phone} (id: ${existing.id})`)
     } else {
-      console.log(`✓ Created ${phone} (id: ${data.user?.id})`)
+      const { data, error } = await admin.auth.admin.createUser({
+        phone,
+        password,
+        phone_confirm: true,
+      })
+      if (error) console.error(`✗ Failed to create ${phone}:`, error.message)
+      else console.log(`✓ Created ${phone} (id: ${data.user?.id})`)
     }
   }
 

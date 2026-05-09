@@ -1,158 +1,42 @@
-import { Injectable, ForbiddenException, NotFoundException } from '@nestjs/common'
-import { ConfigService } from '@nestjs/config'
-import { SupabaseService } from '../supabase/supabase.service'
-import { SubscriptionsService } from '../subscriptions/subscriptions.service'
-import { RecordPayoutDto } from './dto/record-payout.dto'
-import * as PDFDocument from 'pdfkit'
+import { Injectable, ForbiddenException, NotFoundException, Logger } from '@nestjs/common'
+import { GroupsRepo } from '../groups/groups.repo'
+import { PayoutsRepo } from './payouts.repo'
+import { CreatePayoutInput } from './payouts.dto'
+import { Payout } from './payouts.schema'
 
 @Injectable()
 export class PayoutsService {
+  private readonly logger = new Logger(PayoutsService.name)
+
   constructor(
-    private readonly supabase: SupabaseService,
-    private readonly subscriptions: SubscriptionsService,
-    private readonly config: ConfigService,
+    private readonly payoutsRepo: PayoutsRepo,
+    private readonly groupsRepo: GroupsRepo,
   ) {}
 
-  async getPayouts(groupId: string, adminId: string) {
+  async getPayouts(groupId: string, adminId: string): Promise<Payout[]> {
     await this.validateGroupOwnership(groupId, adminId)
-    const { data, error } = await this.supabase
-      .getAdminClient()
-      .from('payouts')
-      .select('*, group_members(name, phone, payout_position)')
-      .eq('group_id', groupId)
-      .order('paid_out_at', { ascending: false })
-    if (error) throw new NotFoundException(error.message)
-    return data
-  }
-
-  async recordPayout(groupId: string, adminId: string, dto: RecordPayoutDto) {
-    await this.validateGroupOwnership(groupId, adminId)
-
-    const { data: member } = await this.supabase
-      .getAdminClient()
-      .from('group_members')
-      .select('name, phone')
-      .eq('id', dto.memberId)
-      .eq('group_id', groupId)
-      .single()
-
-    if (!member) throw new NotFoundException('Member not found')
-
-    const { data: group } = await this.supabase
-      .getAdminClient()
-      .from('groups')
-      .select('name, contribution_amount, frequency')
-      .eq('id', groupId)
-      .single()
-
-    const { data: payout, error } = await this.supabase
-      .getAdminClient()
-      .from('payouts')
-      .insert({
-        group_id: groupId,
-        member_id: dto.memberId,
-        cycle_number: dto.cycleNumber,
-        amount: dto.amount,
-        paid_out_at: new Date().toISOString(),
-      })
-      .select()
-      .single()
-
-    if (error) throw new NotFoundException(error.message)
-
-    const plan = await this.subscriptions.getUserPlan(adminId)
-    if (plan === 'smart' || plan === 'pro') {
-      try {
-        const receiptUrl = await this.generateAndUploadReceipt(payout.id, {
-          memberName: member.name,
-          memberPhone: member.phone,
-          groupName: group?.name ?? '',
-          amount: dto.amount,
-          cycleNumber: dto.cycleNumber,
-          paidOutAt: payout.paid_out_at,
-        })
-        await this.supabase
-          .getAdminClient()
-          .from('payouts')
-          .update({ receipt_url: receiptUrl })
-          .eq('id', payout.id)
-        return { ...payout, receipt_url: receiptUrl }
-      } catch {
-        // Receipt generation failure doesn't block payout recording
-      }
+    try {
+      return await this.payoutsRepo.findAllByGroup(groupId)
+    } catch (error) {
+      this.logger.error(`List payouts failed: ${error.message}`)
+      throw new NotFoundException('Could not load payouts.')
     }
-
-    return payout
   }
 
-  private async generateAndUploadReceipt(
-    payoutId: string,
-    info: {
-      memberName: string
-      memberPhone: string
-      groupName: string
-      amount: number
-      cycleNumber: number
-      paidOutAt: string
-    },
-  ): Promise<string> {
-    const pdfBuffer = await this.buildPdf(info)
-    const bucket = this.config.get<string>('SUPABASE_STORAGE_BUCKET') ?? 'receipts'
-    const filePath = `receipts/${payoutId}.pdf`
+  async recordPayout(adminId: string, input: CreatePayoutInput): Promise<Payout> {
+    await this.validateGroupOwnership(input.group_id, adminId)
 
-    const { error } = await this.supabase
-      .getAdminClient()
-      .storage.from(bucket)
-      .upload(filePath, pdfBuffer, { contentType: 'application/pdf', upsert: true })
-
-    if (error) throw new Error(error.message)
-
-    const { data } = this.supabase
-      .getAdminClient()
-      .storage.from(bucket)
-      .getPublicUrl(filePath)
-    return data.publicUrl
-  }
-
-  private buildPdf(info: {
-    memberName: string
-    memberPhone: string
-    groupName: string
-    amount: number
-    cycleNumber: number
-    paidOutAt: string
-  }): Promise<Buffer> {
-    return new Promise((resolve, reject) => {
-      const doc = new PDFDocument({ margin: 50 })
-      const chunks: Buffer[] = []
-      doc.on('data', (chunk) => chunks.push(chunk))
-      doc.on('end', () => resolve(Buffer.concat(chunks)))
-      doc.on('error', reject)
-
-      doc.fontSize(20).text('AjoPot — Payout Receipt', { align: 'center' })
-      doc.moveDown()
-      doc.fontSize(12)
-      doc.text(`Group: ${info.groupName}`)
-      doc.text(`Member: ${info.memberName} (${info.memberPhone})`)
-      doc.text(`Cycle: ${info.cycleNumber}`)
-      doc.text(`Amount: ₦${(info.amount / 100).toLocaleString('en-NG')}`)
-      doc.text(
-        `Paid on: ${new Date(info.paidOutAt).toLocaleDateString('en-NG', { timeZone: 'Africa/Lagos' })}`,
-      )
-      doc.moveDown()
-      doc.fontSize(10).text('Generated by AjoPot — ajopot.ng', { align: 'center' })
-      doc.end()
-    })
+    try {
+      return await this.payoutsRepo.create(input)
+    } catch (error) {
+      this.logger.error(`Record payout failed: ${error.message}`)
+      throw new NotFoundException('Could not record payout.')
+    }
   }
 
   private async validateGroupOwnership(groupId: string, adminId: string) {
-    const { data } = await this.supabase
-      .getAdminClient()
-      .from('groups')
-      .select('id')
-      .eq('id', groupId)
-      .eq('admin_id', adminId)
-      .maybeSingle()
-    if (!data) throw new ForbiddenException('Group not found or access denied')
+    const group = await this.groupsRepo.findById(adminId, groupId)
+    if (!group) throw new ForbiddenException('Group not found or access denied')
+    return group
   }
 }

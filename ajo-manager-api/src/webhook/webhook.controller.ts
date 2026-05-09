@@ -5,6 +5,7 @@ import { WhatsappWebhookDto } from './dto/whatsapp-webhook.dto'
 import { SupabaseService } from '../supabase/supabase.service'
 import { ConfigService } from '@nestjs/config'
 import { SubscriptionsService } from '../subscriptions/subscriptions.service'
+import { SubscriptionPlan } from '../subscriptions/subscriptions.schema'
 
 @Controller('webhook')
 export class WebhookController {
@@ -48,7 +49,7 @@ export class WebhookController {
   async paystackWebhook(
     @Headers('x-paystack-signature') signature: string,
     @Req() req: Request & { rawBody?: Buffer },
-    @Body() body: { event: string; data: { status: string; reference: string; metadata: { user_id: string; plan: string } } },
+    @Body() body: { event: string; data: any },
   ) {
     try {
       const secret = this.config.get<string>('PAYSTACK_SECRET_KEY') ?? ''
@@ -57,17 +58,64 @@ export class WebhookController {
         if (hash !== signature) return { status: 'invalid signature' }
       }
 
-      if (body?.event === 'charge.success' && body.data?.status === 'success') {
-        const { user_id, plan } = body.data.metadata ?? {}
+      await this.supabase.getAdminClient().from('payment_events').insert({
+        event_type: body?.event ?? 'unknown',
+        paystack_reference: body?.data?.reference,
+        user_id: body?.data?.metadata?.user_id,
+        payload: body,
+      })
+
+      const event = body?.event
+      const data = body?.data
+      const user_id = data?.metadata?.user_id
+      const plan = data?.metadata?.plan
+
+      if (event === 'charge.success' && data?.status === 'success') {
         if (user_id && plan) {
           await this.subscriptions.activateSubscription(
             user_id,
-            plan as 'basic' | 'smart' | 'pro',
-            body.data.reference,
+            plan as SubscriptionPlan,
+            data.reference,
           )
         }
+      } else if (event === 'charge.failed' || event === 'invoice.payment_failed') {
+        if (user_id) {
+          const { data: sub } = await this.supabase
+            .getAdminClient()
+            .from('subscriptions')
+            .select('retry_count')
+            .eq('user_id', user_id)
+            .single()
+
+          const retries = (sub?.retry_count ?? 0) + 1
+          await this.supabase
+            .getAdminClient()
+            .from('subscriptions')
+            .update({ status: 'payment_failed', retry_count: retries })
+            .eq('user_id', user_id)
+        }
+      } else if (event === 'subscription.disable') {
+        // Find by customer code or email if user_id is missing
+        let targetUser = user_id
+        if (!targetUser && data?.customer?.customer_code) {
+           const { data: c } = await this.supabase
+             .getAdminClient()
+             .from('subscriptions')
+             .select('user_id')
+             .eq('paystack_customer_code', data.customer.customer_code)
+             .maybeSingle()
+           if (c) targetUser = c.user_id
+        }
+        
+        if (targetUser) {
+          await this.supabase
+            .getAdminClient()
+            .from('subscriptions')
+            .update({ status: 'cancelled' })
+            .eq('user_id', targetUser)
+        }
       }
-    } catch {
+    } catch (err) {
       // Webhook errors must not throw — Paystack retries on non-200
     }
     return { status: 'ok' }

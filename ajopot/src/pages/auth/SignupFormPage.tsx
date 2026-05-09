@@ -3,16 +3,17 @@ import * as Yup from 'yup'
 import { useNavigate } from 'react-router-dom'
 import { useMutation } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
-import { completeProfile } from '@/lib/api'
+import { completeProfile, extractErrorMessage } from '@/lib/api'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
 
 const schema = Yup.object({
   name: Yup.string().min(2, 'Name too short').max(100).required('Name is required'),
+  email: Yup.string().email('Invalid email address').required('Email is required'),
   referralCode: Yup.string().max(20).optional(),
 })
 
-export default function SignupFormPage() {
+const SignupFormPage = () => {
   const navigate = useNavigate()
 
   const mutation = useMutation({
@@ -21,14 +22,14 @@ export default function SignupFormPage() {
       toast.success('Profile created!')
       navigate('/plan-select')
     },
-    onError: (e: any) => toast.error(e?.response?.data?.message ?? 'Failed to save profile'),
+    onError: (e: any) => toast.error(extractErrorMessage(e)),
   })
 
   const formik = useFormik({
-    initialValues: { name: '', referralCode: '' },
+    initialValues: { name: '', email: '', referralCode: '' },
     validationSchema: schema,
     onSubmit: (values) => {
-      mutation.mutate({ name: values.name, referralCode: values.referralCode || undefined })
+      mutation.mutate({ name: values.name, email: values.email, referralCode: values.referralCode || undefined })
     },
   })
 
@@ -37,7 +38,7 @@ export default function SignupFormPage() {
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
           <h1 className="text-3xl font-bold text-gray-900">Welcome to AjoPot</h1>
-          <p className="text-gray-500 mt-2">Tell us your name to get started</p>
+          <p className="text-gray-500 mt-2">Tell us your name and email to get started</p>
         </div>
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8">
           <form onSubmit={formik.handleSubmit} className="space-y-5">
@@ -46,6 +47,13 @@ export default function SignupFormPage() {
               placeholder="e.g. Chioma Okafor"
               {...formik.getFieldProps('name')}
               error={formik.touched.name ? formik.errors.name : undefined}
+            />
+            <Input
+              label="Your email address"
+              type="email"
+              placeholder="e.g. chioma@example.com"
+              {...formik.getFieldProps('email')}
+              error={formik.touched.email ? formik.errors.email : undefined}
             />
             <Input
               label="Referral code (optional)"
@@ -63,3 +71,6 @@ export default function SignupFormPage() {
     </div>
   )
 }
+
+
+export default SignupFormPage;

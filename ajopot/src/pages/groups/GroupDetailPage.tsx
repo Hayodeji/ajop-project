@@ -13,6 +13,10 @@ import { formatKobo, formatDate } from '@/lib/utils'
 import InviteMemberModal from '@/components/modals/InviteMemberModal'
 import RecordPayoutModal from '@/components/modals/RecordPayoutModal'
 import { ContributionStatus } from '@/types'
+import RotationSchedule from '@/components/groups/RotationSchedule'
+import CycleCalendar from '@/components/groups/CycleCalendar'
+import EditGroupModal from '@/components/modals/EditGroupModal'
+import EditMemberModal from '@/components/modals/EditMemberModal'
 
 type Tab = 'members' | 'contributions' | 'payouts'
 
@@ -22,7 +26,7 @@ const STATUS_TONE: Record<ContributionStatus, 'success' | 'warning' | 'danger'> 
   late: 'danger',
 }
 
-export default function GroupDetailPage() {
+const GroupDetailPage = () => {
   const { id } = useParams<{ id: string }>()
   const [tab, setTab] = useState<Tab>('members')
   const openModal = useUiStore((s) => s.openModal)
@@ -36,6 +40,8 @@ export default function GroupDetailPage() {
 
   const removeMember = useRemoveMember(id!)
   const markContribution = useMarkContribution(id!)
+
+  const [editingMember, setEditingMember] = useState<any>(null)
 
   if (groupLoading) return <div className="flex justify-center py-20"><Spinner size="lg" /></div>
   if (!group) return <div className="text-center py-20 text-gray-500">Group not found</div>
@@ -57,6 +63,13 @@ export default function GroupDetailPage() {
             <Button
               variant="secondary"
               size="sm"
+              onClick={() => openModal('edit-group')}
+            >
+              Edit Group
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
               onClick={() => { navigator.clipboard.writeText(publicUrl) }}
             >
               Copy member link
@@ -64,6 +77,12 @@ export default function GroupDetailPage() {
           </div>
         </div>
       </div>
+
+      <EditGroupModal
+        open={activeModal === 'edit-group'}
+        onClose={closeModal}
+        group={group}
+      />
 
       {/* Tabs */}
       <div className="border-b border-gray-200">
@@ -86,10 +105,18 @@ export default function GroupDetailPage() {
 
       {/* Members tab */}
       {tab === 'members' && (
-        <div className="space-y-4">
-          <div className="flex justify-end">
-            <Button size="sm" onClick={() => openModal('invite-member')}>+ Add Member</Button>
+        <div className="space-y-6">
+          <div className="flex justify-between items-center">
+            <h2 className="text-lg font-semibold text-gray-900">Members</h2>
+            <div className="flex gap-2">
+              <Link to={`/groups/${id}/members`}>
+                <Button size="sm" variant="secondary">Manage List</Button>
+              </Link>
+              <Button size="sm" onClick={() => openModal('invite-member')}>+ Add Member</Button>
+            </div>
           </div>
+          
+          <RotationSchedule schedule={group.rotation_schedule || []} currentCycle={group.current_cycle} />
           {membersLoading ? (
             <div className="flex justify-center py-8"><Spinner /></div>
           ) : (
@@ -109,12 +136,20 @@ export default function GroupDetailPage() {
                         <div className="text-sm text-gray-500">{m.phone}</div>
                       </div>
                     </div>
-                    <button
-                      onClick={() => removeMember.mutate(m.id)}
-                      className="text-xs text-red-500 hover:text-red-700"
-                    >
-                      Remove
-                    </button>
+                    <div className="flex gap-4">
+                      <button
+                        onClick={() => { setEditingMember(m); openModal('edit-member') }}
+                        className="text-xs text-green-600 hover:text-green-800 font-medium"
+                      >
+                        Edit
+                      </button>
+                      <button
+                        onClick={() => removeMember.mutate(m.id)}
+                        className="text-xs text-red-500 hover:text-red-700"
+                      >
+                        Remove
+                      </button>
+                    </div>
                   </div>
                 </Card>
               ))}
@@ -126,16 +161,27 @@ export default function GroupDetailPage() {
             groupId={id!}
             memberCount={members?.length ?? 0}
           />
+          {editingMember && (
+            <EditMemberModal
+              open={activeModal === 'edit-member'}
+              onClose={() => { closeModal(); setEditingMember(null) }}
+              groupId={id!}
+              member={editingMember}
+            />
+          )}
         </div>
       )}
 
       {/* Contributions tab */}
       {tab === 'contributions' && (
-        <div className="space-y-2">
+        <div className="space-y-6">
+          <CycleCalendar contributions={contributions || []} currentCycle={group.current_cycle} />
+          
           {contribLoading ? (
             <div className="flex justify-center py-8"><Spinner /></div>
           ) : (
             <>
+              <h3 className="text-lg font-semibold text-gray-900 mt-6 mb-4">All Contributions</h3>
               {contributions?.length === 0 && (
                 <p className="text-gray-400 text-sm text-center py-8">No contributions recorded</p>
               )}
@@ -231,3 +277,6 @@ export default function GroupDetailPage() {
     </div>
   )
 }
+
+
+export default GroupDetailPage;

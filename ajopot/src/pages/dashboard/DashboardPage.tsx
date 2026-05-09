@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/Button'
 import { Spinner } from '@/components/ui/Spinner'
 import { formatKobo } from '@/lib/utils'
 
-export default function DashboardPage() {
+const DashboardPage = () => {
   const user = useAuthStore((s) => s.user)
   const { data: groups, isLoading } = useGroups()
   const { data: sub } = useSubscription()
@@ -75,3 +75,6 @@ export default function DashboardPage() {
     </div>
   )
 }
+
+
+export default DashboardPage;

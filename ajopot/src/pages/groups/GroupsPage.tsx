@@ -7,7 +7,7 @@ import { Spinner } from '@/components/ui/Spinner'
 import { formatKobo, formatDate } from '@/lib/utils'
 import CreateGroupModal from '@/components/modals/CreateGroupModal'
 
-export default function GroupsPage() {
+const GroupsPage = () => {
   const { data: groups, isLoading } = useGroups()
   const openModal = useUiStore((s) => s.openModal)
   const activeModal = useUiStore((s) => s.activeModal)
@@ -67,3 +67,6 @@ export default function GroupsPage() {
     </div>
   )
 }
+
+
+export default GroupsPage;

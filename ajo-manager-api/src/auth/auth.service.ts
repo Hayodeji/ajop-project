@@ -1,87 +1,99 @@
 import { Injectable, ConflictException, NotFoundException } from '@nestjs/common'
 import { SupabaseService } from '../supabase/supabase.service'
-import { CompleteProfileDto } from './dto/complete-profile.dto'
+import { AuthRepo } from './auth.repo'
+import { CompleteProfileInput, ForgotPasswordInput } from './auth.dto'
 
 @Injectable()
 export class AuthService {
-  constructor(private readonly supabase: SupabaseService) {}
+  constructor(
+    private readonly supabase: SupabaseService,
+    private readonly authRepo: AuthRepo,
+  ) {}
 
   async checkPhone(phone: string): Promise<{ isNewUser: boolean }> {
-    const { data } = await this.supabase
-      .getAdminClient()
-      .from('profiles')
-      .select('id')
-      .eq('phone', phone)
-      .maybeSingle()
-    return { isNewUser: !data }
+    try {
+      const data = await this.authRepo.findProfileByPhone(phone)
+      return { isNewUser: !data }
+    } catch (error) {
+      return { isNewUser: true }
+    }
   }
 
-  async completeProfile(userId: string, dto: CompleteProfileDto, authPhone?: string) {
-    const { data: existing } = await this.supabase
-      .getAdminClient()
-      .from('profiles')
-      .select('id')
-      .eq('user_id', userId)
-      .maybeSingle()
+  async completeProfile(userId: string, input: CompleteProfileInput & { referralCode?: string, phone?: string }, authPhone?: string) {
+    const existing = await this.authRepo.findProfileByUserId(userId)
 
     if (existing) {
-      const updates: Record<string, unknown> = { name: dto.name }
-      if (dto.phone) updates.phone = dto.phone
-      const { data, error } = await this.supabase
-        .getAdminClient()
-        .from('profiles')
-        .update(updates)
-        .eq('user_id', userId)
-        .select()
-        .single()
-      if (error) throw new ConflictException(error.message)
-      return data
+      const updates: Record<string, unknown> = { name: input.name }
+      if (input.phone) updates.phone = input.phone
+      if (input.email) {
+        // Try to update email in Supabase Auth
+        await this.supabase.getAdminClient().auth.admin.updateUserById(userId, { email: input.email, email_confirm: true })
+      }
+      try {
+        return await this.authRepo.updateProfile(userId, updates)
+      } catch (error) {
+        throw new ConflictException(error.message)
+      }
     }
 
     let referredBy: string | null = null
-    if (dto.referralCode) {
-      const { data: referrer } = await this.supabase
-        .getAdminClient()
-        .from('profiles')
-        .select('user_id')
-        .eq('referral_code', dto.referralCode)
-        .maybeSingle()
+    if (input.referralCode) {
+      const referrer = await this.authRepo.findByReferralCode(input.referralCode)
       if (referrer) referredBy = referrer.user_id
     }
 
     const referralCode = this.generateReferralCode()
 
-    const { data, error } = await this.supabase
-      .getAdminClient()
-      .from('profiles')
-      .insert({
+    if (input.email) {
+      // Try to update email in Supabase Auth
+      await this.supabase.getAdminClient().auth.admin.updateUserById(userId, { email: input.email, email_confirm: true })
+    }
+
+    try {
+      return await this.authRepo.createProfile({
         user_id: userId,
-        phone: dto.phone ?? authPhone ?? null,
-        name: dto.name,
+        phone: input.phone ?? authPhone ?? null,
+        name: input.name,
         plan: 'basic',
         is_pro: false,
         referral_code: referralCode,
         referred_by: referredBy,
       })
-      .select()
-      .single()
-
-    if (error) throw new ConflictException(error.message)
-    return data
+    } catch (error) {
+      throw new ConflictException(error.message)
+    }
   }
 
   async getProfile(userId: string) {
-    const { data, error } = await this.supabase
-      .getAdminClient()
-      .from('profiles')
-      .select('*')
-      .eq('user_id', userId)
-      .maybeSingle()
-    if (error) throw new NotFoundException('Profile not found')
-    return data
+    try {
+      const data = await this.authRepo.findProfileByUserId(userId)
+      if (!data) throw new NotFoundException('Profile not found')
+      return data
+    } catch (error) {
+      throw new NotFoundException('Profile not found')
+    }
   }
 
   private generateReferralCode(): string {
     return Math.random().toString(36).substring(2, 8).toUpperCase()
+  }
+
+  async forgotPassword(input: ForgotPasswordInput) {
+    if (input.email) {
+      const { error } = await this.supabase.getAdminClient().auth.resetPasswordForEmail(input.email)
+      if (error) throw new ConflictException(error.message)
+      return { success: true, message: 'Password reset email sent' }
+    } else if (input.phone) {
+      const { error } = await this.supabase.getAdminClient().auth.signInWithOtp({ phone: input.phone })
+      if (error) throw new ConflictException(error.message)
+      return { success: true, message: 'OTP sent to phone' }
+    }
+    throw new ConflictException('Email or phone is required')
+  }
+
+  async resetPassword(userId: string, password: string) {
+    const { error } = await this.supabase.getAdminClient().auth.admin.updateUserById(userId, { password })
+    if (error) throw new ConflictException(error.message)
+    return { success: true }
   }
 }

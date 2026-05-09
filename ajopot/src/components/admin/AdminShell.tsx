@@ -10,12 +10,12 @@ const NAV = [
   { to: '/admin/activity', label: 'Activity', icon: '📋' },
 ]
 
-export default function AdminShell() {
+const AdminShell = () => {
   const navigate = useNavigate()
 
   const handleSignOut = async () => {
     await supabase.auth.signOut()
-    navigate('/admin/login', { replace: true })
+    navigate('/login', { replace: true })
   }
 
   return (
@@ -71,3 +71,6 @@ export default function AdminShell() {
     </div>
   )
 }
+
+
+export default AdminShell;

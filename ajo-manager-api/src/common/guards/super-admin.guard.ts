@@ -1,4 +1,5 @@
 import { Injectable, CanActivate, ExecutionContext, ForbiddenException } from '@nestjs/common'
+import { GqlExecutionContext } from '@nestjs/graphql'
 import { ConfigService } from '@nestjs/config'
 import { SupabaseService } from '../../supabase/supabase.service'
 
@@ -10,8 +11,11 @@ export class SuperAdminGuard implements CanActivate {
   ) {}
 
   async canActivate(ctx: ExecutionContext): Promise<boolean> {
-    const request = ctx.switchToHttp().getRequest()
-    const authHeader: string = request.headers['authorization'] ?? ''
+    const gqlCtx = GqlExecutionContext.create(ctx)
+    const request = gqlCtx.getContext().req || ctx.switchToHttp().getRequest()
+
+    if (!request?.headers) throw new ForbiddenException('Invalid request context')
+    const authHeader: string = (request.headers['authorization'] as string) ?? ''
     const token = authHeader.replace('Bearer ', '').trim()
     if (!token) throw new ForbiddenException('No token provided')
 

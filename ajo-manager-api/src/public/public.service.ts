@@ -1,37 +1,47 @@
-import { Injectable, NotFoundException } from '@nestjs/common'
-import { SupabaseService } from '../supabase/supabase.service'
+import { Injectable, NotFoundException, Logger } from '@nestjs/common'
+import { PublicRepo } from './public.repo'
+import { PublicGroupResponse } from './public.schema'
 
 @Injectable()
 export class PublicService {
-  constructor(private readonly supabase: SupabaseService) {}
+  private readonly logger = new Logger(PublicService.name)
 
-  async getGroupByToken(token: string) {
-    const { data: group, error } = await this.supabase
-      .getAdminClient()
-      .from('groups')
-      .select(
-        'id, name, contribution_amount, frequency, member_count, current_cycle, public_token, created_at',
-      )
-      .eq('public_token', token)
-      .maybeSingle()
+  constructor(private readonly publicRepo: PublicRepo) {}
 
-    if (error || !group) throw new NotFoundException('Group not found')
+  async getGroupByToken(token: string): Promise<PublicGroupResponse> {
+    let group: any
+    try {
+      group = await this.publicRepo.findGroupByToken(token)
+    } catch (error) {
+      this.logger.error(`Fetch public group failed: ${error.message}`)
+      throw new NotFoundException('Group not found')
+    }
 
-    const { data: members } = await this.supabase
-      .getAdminClient()
-      .from('group_members')
-      .select('id, name, payout_position, is_active')
-      .eq('group_id', group.id)
-      .eq('is_active', true)
-      .order('payout_position')
+    if (!group) throw new NotFoundException('Group not found')
 
-    const { data: contributions } = await this.supabase
-      .getAdminClient()
-      .from('contributions')
-      .select('id, member_id, cycle_number, status, paid_at')
-      .eq('group_id', group.id)
-      .eq('cycle_number', group.current_cycle)
+    try {
+      const members = await this.publicRepo.findMembersByGroup(group.id)
+      const contributions = await this.publicRepo.findContributionsByGroup(group.id, group.current_cycle)
 
-    return { group, members: members ?? [], contributions: contributions ?? [] }
+      const anonymisedMembers = members.map(m => {
+        let anonPhone = ''
+        if (m.phone && m.phone.length >= 8) {
+          anonPhone = m.phone.substring(0, 4) + '****' + m.phone.substring(m.phone.length - 4)
+        }
+        return {
+          ...m,
+          phone: anonPhone
+        }
+      })
+
+      return { 
+        group, 
+        members: anonymisedMembers as any, 
+        contributions: contributions as any 
+      }
+    } catch (error) {
+      this.logger.error(`Fetch public details failed: ${error.message}`)
+      throw new NotFoundException('Could not load group details.')
+    }
   }
 }

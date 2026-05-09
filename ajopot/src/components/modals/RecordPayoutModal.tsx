@@ -20,7 +20,7 @@ interface Props {
   currentCycle: number
 }
 
-export default function RecordPayoutModal({ open, onClose, groupId, members, currentCycle }: Props) {
+const RecordPayoutModal = ({ open, onClose, groupId, members, currentCycle }: Props) => {
   const { mutate: record, isPending } = useRecordPayout(groupId)
 
   const formik = useFormik({
@@ -81,3 +81,6 @@ export default function RecordPayoutModal({ open, onClose, groupId, members, cur
     </Modal>
   )
 }
+
+
+export default RecordPayoutModal;

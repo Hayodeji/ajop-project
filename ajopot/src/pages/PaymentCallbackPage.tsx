@@ -4,15 +4,17 @@ import { verifyPayment } from '@/lib/api'
 
 type State = 'verifying' | 'success' | 'failed'
 
-export default function PaymentCallbackPage() {
+const PaymentCallbackPage = () => {
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
   const [state, setState] = useState<State>('verifying')
   const [plan, setPlan] = useState('')
+  const [errorMsg, setErrorMsg] = useState('')
 
   useEffect(() => {
     const reference = searchParams.get('reference')
     if (!reference) {
+      setErrorMsg('No reference provided')
       setState('failed')
       return
     }
@@ -23,7 +25,10 @@ export default function PaymentCallbackPage() {
         setState('success')
         setTimeout(() => navigate('/dashboard', { replace: true }), 3000)
       })
-      .catch(() => setState('failed'))
+      .catch((err) => {
+        setErrorMsg(err.message || 'An unknown error occurred')
+        setState('failed')
+      })
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
@@ -64,6 +69,9 @@ export default function PaymentCallbackPage() {
               </svg>
             </div>
             <h2 className="text-xl font-bold text-gray-900">Payment could not be verified</h2>
+            <p className="text-red-500 font-medium text-sm mt-2">
+              {errorMsg}
+            </p>
             <p className="text-gray-500 text-sm mt-2">
               If you were charged, contact support. Otherwise, try again.
             </p>
@@ -79,3 +87,6 @@ export default function PaymentCallbackPage() {
     </div>
   )
 }
+
+
+export default PaymentCallbackPage;

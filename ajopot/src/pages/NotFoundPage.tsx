@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom'
 import { Button } from '@/components/ui/Button'
 
-export default function NotFoundPage() {
+const NotFoundPage = () => {
   return (
     <div className="min-h-screen flex items-center justify-center px-4">
       <div className="text-center max-w-md">
@@ -19,3 +19,6 @@ export default function NotFoundPage() {
     </div>
   )
 }
+
+
+export default NotFoundPage;

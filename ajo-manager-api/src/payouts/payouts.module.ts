@@ -1,11 +1,13 @@
 import { Module } from '@nestjs/common'
-import { PayoutsController } from './payouts.controller'
+import { AuthModule } from '../auth/auth.module'
+import { GroupsModule } from '../groups/groups.module'
 import { PayoutsService } from './payouts.service'
-import { SubscriptionsModule } from '../subscriptions/subscriptions.module'
+import { PayoutsResolver } from './payouts.resolver'
+import { PayoutsRepo } from './payouts.repo'
 
 @Module({
-  imports: [SubscriptionsModule],
-  controllers: [PayoutsController],
-  providers: [PayoutsService],
+  imports: [AuthModule, GroupsModule],
+  providers: [PayoutsService, PayoutsResolver, PayoutsRepo],
+  exports: [PayoutsService],
 })
 export class PayoutsModule {}

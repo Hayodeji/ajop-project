@@ -1,9 +1,9 @@
 import { Module } from '@nestjs/common'
-import { PublicController } from './public.controller'
 import { PublicService } from './public.service'
+import { PublicResolver } from './public.resolver'
+import { PublicRepo } from './public.repo'
 
 @Module({
-  controllers: [PublicController],
-  providers: [PublicService],
+  providers: [PublicService, PublicResolver, PublicRepo],
 })
 export class PublicModule {}

@@ -11,7 +11,7 @@ const ACTIVITY_ICONS: Record<string, string> = {
   subscription: '💳',
 }
 
-export default function AdminDashboard() {
+const AdminDashboard = () => {
   const { data: stats, isLoading } = useQuery({ queryKey: ['admin-stats'], queryFn: adminGetStats })
   const { data: activity } = useQuery({ queryKey: ['admin-activity'], queryFn: adminGetActivity })
 
@@ -62,3 +62,6 @@ export default function AdminDashboard() {
     </div>
   )
 }
+
+
+export default AdminDashboard;

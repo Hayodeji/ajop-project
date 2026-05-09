@@ -1,12 +1,19 @@
-import { Injectable, ForbiddenException, NotFoundException } from '@nestjs/common'
-import { SupabaseService } from '../supabase/supabase.service'
+import { Injectable, ForbiddenException, NotFoundException, Logger } from '@nestjs/common'
 import { SubscriptionsService } from '../subscriptions/subscriptions.service'
-import { MarkContributionDto } from './dto/mark-contribution.dto'
+import { GroupsRepo } from '../groups/groups.repo'
+import { MembersRepo } from '../members/members.repo'
+import { ContributionsRepo } from './contributions.repo'
+import { CreateContributionInput } from './contributions.dto'
+import { Contribution, ContributionStatus } from './contributions.schema'
 
 @Injectable()
 export class ContributionsService {
+  private readonly logger = new Logger(ContributionsService.name)
+
   constructor(
-    private readonly supabase: SupabaseService,
+    private readonly contributionsRepo: ContributionsRepo,
+    private readonly groupsRepo: GroupsRepo,
+    private readonly membersRepo: MembersRepo,
     private readonly subscriptions: SubscriptionsService,
   ) {}
 
@@ -15,88 +22,98 @@ export class ContributionsService {
     adminId: string,
     fromDate?: string,
     toDate?: string,
-  ) {
+  ): Promise<Contribution[]> {
     await this.validateGroupOwnership(groupId, adminId)
 
     const plan = await this.subscriptions.getUserPlan(adminId)
-    const query = this.supabase
-      .getAdminClient()
-      .from('contributions')
-      .select('*, group_members(name, phone, payout_position)')
-      .eq('group_id', groupId)
-      .order('cycle_number', { ascending: false })
-      .order('created_at', { ascending: false })
+    let cycleNumber: number | undefined
 
-    // Full history only for smart and pro
     if (plan === 'basic') {
-      const { data: group } = await this.supabase
-        .getAdminClient()
-        .from('groups')
-        .select('current_cycle')
-        .eq('id', groupId)
-        .single()
-      query.eq('cycle_number', group?.current_cycle ?? 1)
-    } else if (fromDate && toDate) {
-      query.gte('paid_at', fromDate).lte('paid_at', toDate)
+      const group = await this.groupsRepo.findById(adminId, groupId)
+      cycleNumber = group?.current_cycle ?? 1
     }
 
-    const { data, error } = await query
-    if (error) throw new NotFoundException(error.message)
-    return data
+    try {
+      return await this.contributionsRepo.findAllByGroup(groupId, cycleNumber, fromDate, toDate)
+    } catch (error) {
+      this.logger.error(`List contributions failed: ${error.message}`)
+      throw new NotFoundException(`Could not load contributions: ${error.message}`)
+    }
   }
 
-  async markContribution(groupId: string, adminId: string, dto: MarkContributionDto) {
-    await this.validateGroupOwnership(groupId, adminId)
+  async markContribution(adminId: string, input: CreateContributionInput): Promise<Contribution> {
+    const group = await this.validateGroupOwnership(input.group_id, adminId)
 
-    const paidAt = dto.status === 'paid' ? new Date().toISOString() : null
+    const paidAt = input.status === ContributionStatus.PAID ? new Date().toISOString() : null
 
-    const { data: existing } = await this.supabase
-      .getAdminClient()
-      .from('contributions')
-      .select('id')
-      .eq('group_id', groupId)
-      .eq('member_id', dto.memberId)
-      .eq('cycle_number', dto.cycleNumber)
-      .maybeSingle()
+    const existing = await this.contributionsRepo.findExisting(input.group_id, input.member_id, input.cycle_number)
 
-    if (existing) {
-      const { data, error } = await this.supabase
-        .getAdminClient()
-        .from('contributions')
-        .update({ status: dto.status, paid_at: paidAt, marked_by: adminId })
-        .eq('id', existing.id)
-        .select()
-        .single()
-      if (error) throw new NotFoundException(error.message)
-      return data
+    let contribution: Contribution
+    try {
+      if (existing) {
+        contribution = await this.contributionsRepo.update(existing.id, {
+          status: input.status,
+          paid_at: paidAt,
+          marked_by: adminId,
+        })
+      } else {
+        contribution = await this.contributionsRepo.create({
+          group_id: input.group_id,
+          member_id: input.member_id,
+          cycle_number: input.cycle_number,
+          status: input.status,
+          paid_at: paidAt,
+          marked_by: adminId,
+        })
+      }
+    } catch (error) {
+      this.logger.error(`Mark contribution failed: ${error.message}`)
+      throw new NotFoundException('Could not mark contribution.')
     }
 
-    const { data, error } = await this.supabase
-      .getAdminClient()
-      .from('contributions')
-      .insert({
-        group_id: groupId,
-        member_id: dto.memberId,
-        cycle_number: dto.cycleNumber,
-        status: dto.status,
-        paid_at: paidAt,
-        marked_by: adminId,
-      })
-      .select()
-      .single()
+    // Late penalty tracking
+    if (input.status === ContributionStatus.LATE && group.late_fee_amount > 0) {
+      const member = await this.membersRepo.findById(input.member_id)
+      if (member) {
+        const newFines = (Number((member as any).outstanding_fines) || 0) + Number(group.late_fee_amount)
+        await this.membersRepo.update(input.member_id, { outstanding_fines: newFines } as any)
+      }
+    }
 
-    if (error) throw new NotFoundException(error.message)
-    return data
+    // Auto-generate next cycle rows if all paid for current cycle
+    if (input.status === ContributionStatus.PAID && input.cycle_number === group.current_cycle) {
+      const count = await this.contributionsRepo.countPaidInCycle(input.group_id, group.current_cycle)
+      
+      if (count === group.member_count) {
+        const nextCycle = group.current_cycle + 1
+        await this.groupsRepo.update(adminId, input.group_id, { current_cycle: nextCycle } as any)
+
+        const now = new Date()
+        const dueDate = new Date(now)
+        if (group.frequency === 'weekly') dueDate.setDate(dueDate.getDate() + 7)
+        else if (group.frequency === 'biweekly') dueDate.setDate(dueDate.getDate() + 14)
+        else if (group.frequency === 'monthly') dueDate.setMonth(dueDate.getMonth() + 1)
+
+        const activeMembers = await this.groupsRepo.getActiveMembers(input.group_id)
+        if (activeMembers.length > 0) {
+          const inserts = activeMembers.map((m: any) => ({
+            group_id: input.group_id,
+            member_id: m.id,
+            cycle_number: nextCycle,
+            status: 'pending',
+            due_date: dueDate.toISOString(),
+          }))
+          await this.contributionsRepo.bulkInsert(inserts)
+        }
+      }
+    }
+
+    return contribution
   }
 
   private async validateGroupOwnership(groupId: string, adminId: string) {
-    const { data } = await this.supabase
-      .getAdminClient()
-      .from('groups')
-      .select('id')
-      .eq('id', groupId)
-      .eq('admin_id', adminId)
-      .maybeSingle()
-    if (!data) throw new ForbiddenException('Group not found or access denied')
+    const group = await this.groupsRepo.findById(adminId, groupId)
+    if (!group) throw new ForbiddenException('Group not found or access denied')
+    return group
   }
 }

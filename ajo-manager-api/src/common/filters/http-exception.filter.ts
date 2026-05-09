@@ -14,10 +14,6 @@ export class AllExceptionsFilter implements ExceptionFilter {
   private readonly logger = new Logger(AllExceptionsFilter.name)
 
   catch(exception: unknown, host: ArgumentsHost) {
-    const ctx = host.switchToHttp()
-    const response = ctx.getResponse<Response>()
-    const request = ctx.getRequest<Request>()
-
     const status =
       exception instanceof HttpException
         ? exception.getStatus()
@@ -25,21 +21,37 @@ export class AllExceptionsFilter implements ExceptionFilter {
 
     const message = this.extractMessage(exception, status)
 
-    if (status >= 500) {
-      this.logger.error(
-        `${request.method} ${request.url} — ${message}`,
-        exception instanceof Error ? exception.stack : undefined,
-      )
-    }
+    if (host.getType() === 'http') {
+      const ctx = host.switchToHttp()
+      const response = ctx.getResponse<Response>()
+      const request = ctx.getRequest<Request>()
 
-    const body: ApiError = {
-      error: {
-        message,
-        code: exception instanceof HttpException ? exception.name : 'InternalServerError',
-      },
-    }
+      if (status >= 500) {
+        this.logger.error(
+          `${request.method} ${request.url} — ${message}`,
+          exception instanceof Error ? exception.stack : undefined,
+        )
+      }
 
-    response.status(status).json(body)
+      const body: ApiError = {
+        error: {
+          message,
+          code: exception instanceof HttpException ? exception.name : 'InternalServerError',
+        },
+      }
+
+      response.status(status).json(body)
+    } else {
+      // GraphQL or other context
+      if (status >= 500) {
+        this.logger.error(
+          `GraphQL — ${message}`,
+          exception instanceof Error ? exception.stack : undefined,
+        )
+      }
+      // Re-throw to let GraphQL layer handle formatting
+      throw exception
+    }
   }
 
   private extractMessage(exception: unknown, status: number): string {
