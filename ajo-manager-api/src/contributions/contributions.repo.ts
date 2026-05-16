@@ -53,7 +53,7 @@ export class ContributionsRepo {
       .select('*, group_members(name, phone, payout_position)')
       .eq('group_id', groupId)
       .order('cycle_number', { ascending: false })
-      .order('created_at', { ascending: false })
+      .order('id', { ascending: false })
 
     if (cycleNumber) {
       query = query.eq('cycle_number', cycleNumber)

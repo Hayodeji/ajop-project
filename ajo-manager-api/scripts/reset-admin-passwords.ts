@@ -1,5 +1,5 @@
-require('dotenv').config()
-import { createClient } from '@supabase/supabase-js'
+import 'dotenv/config'
+import { createClient, User } from '@supabase/supabase-js'
 
 const admin = createClient(
   process.env.SUPABASE_URL!,
@@ -10,9 +10,10 @@ const admin = createClient(
 async function run() {
   const phones = ['+2349065543761', '+2347033139259']
   const { data: { users } } = await admin.auth.admin.listUsers({ perPage: 1000 })
+  const userList = users as User[]
 
   for (const phone of phones) {
-    const user = users.find((u) => u.phone === phone || u.phone === phone.replace('+', ''))
+    const user = userList.find((u) => u.phone === phone || u.phone === phone.replace('+', ''))
     if (!user) { console.log('Not found:', phone); continue }
     const { error } = await admin.auth.admin.updateUserById(user.id, { password: 'Ajopot_123*#,' })
     if (error) console.log('Error:', phone, error.message)

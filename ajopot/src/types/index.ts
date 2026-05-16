@@ -11,6 +11,7 @@ export interface Group {
   current_cycle: number
   public_token: string
   created_at: string
+  rotation_schedule?: { position: number; member_name: string; collects_on_cycle: number }[]
 }
 
 export interface GroupMember {
@@ -59,7 +60,7 @@ export interface ApiError {
 }
 
 export type SubscriptionPlan = 'basic' | 'smart' | 'pro'
-export type SubscriptionStatus = 'trial' | 'active' | 'cancelled' | 'expired'
+export type SubscriptionStatus = 'trial' | 'active' | 'cancelled' | 'expired' | 'payment_failed'
 
 export interface Subscription {
   id: string
@@ -76,6 +77,7 @@ export interface Profile {
   id: string
   user_id: string
   name: string
+  email: string
   phone: string
   plan: SubscriptionPlan
   is_pro: boolean

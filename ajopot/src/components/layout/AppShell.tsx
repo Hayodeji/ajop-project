@@ -1,18 +1,15 @@
 import { NavLink, Outlet } from 'react-router-dom'
-import { Button } from '@/components/ui/Button'
 import { cn } from '@/lib/utils'
-import { useAuthStore } from '@/stores/authStore'
+import { useIdleLogout } from '@/hooks/useIdleLogout'
 
 const NAV = [
   { to: '/dashboard', label: 'Dashboard' },
   { to: '/groups', label: 'Groups' },
-  { to: '/settings', label: 'Settings' },
-  { to: '/faq', label: 'FAQ' },
+  { to: '/profile', label: 'Profile' },
 ]
 
 const AppShell = () => {
-  const logout = useAuthStore((s) => s.logout)
-  const user = useAuthStore((s) => s.user)
+  useIdleLogout()
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -42,14 +39,6 @@ const AppShell = () => {
               </NavLink>
             ))}
           </nav>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={logout}
-            aria-label={`Sign out ${user?.phone ?? ''}`}
-          >
-            Sign out
-          </Button>
         </div>
       </header>
 

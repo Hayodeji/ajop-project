@@ -31,6 +31,19 @@ export class AdminController {
     return this.adminService.updateUser(userId, body)
   }
 
+  @Patch('users/:userId/limits')
+  setUserLimits(
+    @Param('userId') userId: string,
+    @Body()
+    body: {
+      custom_group_limit:  number | null
+      custom_member_limit: number | null
+      limits_note?:        string | null
+    },
+  ) {
+    return this.adminService.setUserLimits(userId, body)
+  }
+
   @Get('groups')
   getGroups(
     @Query('page') page = '1',

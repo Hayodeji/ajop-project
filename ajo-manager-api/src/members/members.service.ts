@@ -7,7 +7,6 @@ import {
 } from '@nestjs/common'
 import { SupabaseService } from '../supabase/supabase.service'
 import { SubscriptionsService } from '../subscriptions/subscriptions.service'
-import { PLAN_MEMBER_LIMITS } from '../subscriptions/subscriptions.schema'
 import { GroupsRepo } from '../groups/groups.repo'
 import { MembersRepo } from './members.repo'
 import { CreateMemberInput, UpdateMemberInput } from './members.dto'
@@ -36,15 +35,15 @@ export class MembersService {
   async inviteMember(adminId: string, input: CreateMemberInput): Promise<Member> {
     const groupData = await this.validateGroupOwnership(input.group_id, adminId)
 
+    const { memberLimit, isMemberLimitCustom } = await this.subscriptions.getEffectiveLimits(adminId)
     const plan = await this.subscriptions.getUserPlan(adminId)
-    const memberLimit = PLAN_MEMBER_LIMITS[plan]
-
     const count = await this.membersRepo.countActiveMembers(input.group_id)
 
     if (count >= memberLimit) {
-      throw new ForbiddenException(
-        `Your ${plan === 'basic' ? 'Basic' : 'Smart'} plan supports up to ${memberLimit} members per group.`,
-      )
+      const msg = isMemberLimitCustom
+        ? `Your account has a custom limit of ${memberLimit} members per group. Contact support to increase it.`
+        : `Your ${plan === 'basic' ? 'Basic' : 'Smart'} plan supports up to ${memberLimit} members per group.`
+      throw new ForbiddenException(msg)
     }
 
     if (count >= groupData.member_count) {

@@ -7,7 +7,6 @@ import {
 } from '@nestjs/common'
 import { randomBytes } from 'crypto'
 import { SubscriptionsService } from '../subscriptions/subscriptions.service'
-import { PLAN_GROUP_LIMITS } from '../subscriptions/subscriptions.schema'
 import { GroupsRepo } from './groups.repo'
 import { CreateGroupInput, UpdateGroupInput } from './groups.dto'
 import { Group } from './groups.schema'
@@ -22,15 +21,15 @@ export class GroupsService {
   ) {}
 
   async create(adminId: string, input: CreateGroupInput): Promise<Group> {
+    const { groupLimit, isGroupLimitCustom } = await this.subscriptions.getEffectiveLimits(adminId)
     const plan = await this.subscriptions.getUserPlan(adminId)
-    const groupLimit = PLAN_GROUP_LIMITS[plan]
-    
     const count = await this.groupsRepo.countByAdminId(adminId)
-    
+
     if (count >= groupLimit) {
-      throw new ForbiddenException(
-        `Your ${plan === 'basic' ? 'Basic' : 'Smart'} plan supports ${groupLimit} group${groupLimit === 1 ? '' : 's'}. Upgrade to ${plan === 'basic' ? 'Smart' : 'Pro'} for ${plan === 'basic' ? 'up to 5 groups' : 'unlimited groups'}.`,
-      )
+      const upgradeHint = isGroupLimitCustom
+        ? `Your account has a custom limit of ${groupLimit} group${groupLimit === 1 ? '' : 's'}. Contact support to increase it.`
+        : `Your ${plan === 'basic' ? 'Basic' : 'Smart'} plan supports ${groupLimit} group${groupLimit === 1 ? '' : 's'}. Upgrade to ${plan === 'basic' ? 'Smart' : 'Pro'} for more groups.`
+      throw new ForbiddenException(upgradeHint)
     }
 
     const publicToken = randomBytes(16).toString('base64url')

@@ -3,9 +3,8 @@
  * Run with: npx ts-node -r tsconfig-paths/register scripts/seed-admins.ts
  */
 
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-require('dotenv').config()
-import { createClient } from '@supabase/supabase-js'
+import 'dotenv/config'
+import { createClient, User } from '@supabase/supabase-js'
 
 const supabaseUrl = process.env.SUPABASE_URL!
 const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
@@ -23,9 +22,10 @@ async function seedAdmins() {
   console.log('Creating/updating super-admin accounts...\n')
 
   const { data: { users } } = await admin.auth.admin.listUsers({ perPage: 1000 })
+  const userList = users as User[]
 
   for (const { phone, password } of ADMINS) {
-    const existing = users.find((u) => u.phone === phone || u.phone === phone.replace('+', ''))
+    const existing = userList.find((u) => u.phone === phone || u.phone === phone.replace('+', ''))
 
     if (existing) {
       const { error } = await admin.auth.admin.updateUserById(existing.id, { password })

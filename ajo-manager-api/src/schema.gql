@@ -18,7 +18,7 @@ input CompleteProfileInput {
 }
 
 type Contribution {
-  created_at: DateTime!
+  created_at: DateTime
   cycle_number: Int!
   due_date: DateTime!
   group_id: ID!
@@ -141,12 +141,14 @@ type PaymentInitiationResponse {
 
 type Payout {
   amount: Int!
-  created_at: DateTime!
+  created_at: DateTime
   cycle_number: Int!
   group_id: ID!
   id: ID!
   member: Member
   member_id: ID!
+  paid_out_at: DateTime
+  receipt_url: String
 }
 
 type Profile {
@@ -206,6 +208,7 @@ type Subscription {
   id: ID!
   plan: SubscriptionPlan!
   status: SubscriptionStatus!
+  trial_ends_at: DateTime
   user_id: ID!
 }
 
@@ -219,7 +222,8 @@ enum SubscriptionStatus {
   ACTIVE
   CANCELLED
   EXPIRED
-  TRIAL
+  PAYMENT_FAILED
+  TRIALING
 }
 
 input UpdateGroupInput {

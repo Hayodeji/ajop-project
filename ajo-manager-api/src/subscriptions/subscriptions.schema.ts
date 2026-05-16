@@ -29,10 +29,11 @@ registerEnumType(SubscriptionPlan, {
 })
 
 export enum SubscriptionStatus {
-  TRIAL = 'trial',
+  TRIALING = 'trialing',
   ACTIVE = 'active',
   EXPIRED = 'expired',
   CANCELLED = 'cancelled',
+  PAYMENT_FAILED = 'payment_failed',
 }
 
 registerEnumType(SubscriptionStatus, {
@@ -52,6 +53,9 @@ export class Subscription {
 
   @Field(() => SubscriptionStatus)
   status: SubscriptionStatus
+
+  @Field({ nullable: true })
+  trial_ends_at?: Date
 
   @Field()
   expires_at: Date

@@ -21,6 +21,12 @@ export class Payout {
   @Field(() => Member, { nullable: true })
   member?: Member
 
-  @Field()
-  created_at: Date
+  @Field({ nullable: true })
+  receipt_url?: string
+
+  @Field({ nullable: true })
+  paid_out_at?: Date
+
+  @Field({ nullable: true })
+  created_at?: Date
 }

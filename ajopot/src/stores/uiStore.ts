@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 
-type ModalId = 'create-group' | 'invite-member' | 'record-payout' | null
+type ModalId = 'create-group' | 'invite-member' | 'record-payout' | 'edit-group' | 'edit-member' | null
 
 interface UiState {
   sidebarOpen: boolean

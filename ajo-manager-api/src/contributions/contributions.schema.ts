@@ -48,8 +48,8 @@ export class Contribution {
   @Field()
   due_date: Date
 
-  @Field()
-  created_at: Date
+  @Field({ nullable: true })
+  created_at?: Date
 
   @Field(() => ContributionMember, { nullable: true })
   member?: ContributionMember

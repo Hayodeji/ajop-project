@@ -1,7 +1,6 @@
 import axios, { AxiosError } from 'axios'
 import type {
   ApiError,
-  ApiResponse,
   Profile,
   Subscription,
   SubscriptionPlan,
@@ -100,7 +99,7 @@ export const resetPassword = (data: { password: string }) =>
 export const getMySubscription = () =>
   gql<Subscription | null>(`
     query MySubscription {
-      mySubscription { id plan status expires_at }
+      mySubscription { id plan status trial_ends_at }
     }
   `)
 
@@ -192,7 +191,7 @@ export const inviteMember = (groupId: string, data: { name: string; phone: strin
     } 
   })
 
-export const removeMember = (groupId: string, memberId: string) =>
+export const removeMember = (_groupId: string, memberId: string) =>
   gql<boolean>(`
     mutation RemoveMember($id: String!) {
       removeMember(id: $id)

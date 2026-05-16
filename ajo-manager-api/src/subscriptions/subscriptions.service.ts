@@ -9,7 +9,7 @@ import axios from 'axios';
 import { ConfigService } from '@nestjs/config';
 import { SupabaseService } from '../supabase/supabase.service';
 import { SubscriptionsRepo } from './subscriptions.repo';
-import { SubscriptionPlan, PLAN_AMOUNTS } from './subscriptions.schema';
+import { SubscriptionPlan, SubscriptionStatus, PLAN_AMOUNTS } from './subscriptions.schema';
 
 @Injectable()
 export class SubscriptionsService {
@@ -24,12 +24,19 @@ export class SubscriptionsService {
   private mapSubscription(data: any) {
     if (!data) return null;
     let expires_at = new Date();
-    if (data.status === 'trialing' && data.trial_ends_at) {
-      expires_at = new Date(data.trial_ends_at);
+    const trial_ends_at = data.trial_ends_at ? new Date(data.trial_ends_at) : null;
+    
+    if (data.status === 'trialing' && trial_ends_at) {
+      expires_at = trial_ends_at;
     } else if (data.status === 'active' && data.current_period_end) {
       expires_at = new Date(data.current_period_end);
     }
-    return { ...data, expires_at };
+    
+    return { 
+      ...data, 
+      trial_ends_at,
+      expires_at 
+    };
   }
 
   async getMySubscription(userId: string) {
@@ -50,7 +57,7 @@ export class SubscriptionsService {
 
     const payload: Record<string, unknown> = {
       plan,
-      status: 'trialing',
+      status: SubscriptionStatus.TRIALING,
       trial_ends_at: trialEnds.toISOString(),
       current_period_start: null,
       current_period_end: null,
@@ -74,7 +81,7 @@ export class SubscriptionsService {
 
     const payload: Record<string, unknown> = {
       plan,
-      status: 'active',
+      status: SubscriptionStatus.ACTIVE,
       current_period_start: now.toISOString(),
       current_period_end: periodEnd.toISOString(),
     };
@@ -92,7 +99,7 @@ export class SubscriptionsService {
       const data = await this.subscriptionsRepo.upsert({
         user_id: userId,
         plan,
-        status: 'trialing',
+        status: SubscriptionStatus.TRIALING,
         trial_ends_at: trialEndsAt.toISOString()
       });
       await this.syncProfilePlan(userId, plan);
@@ -181,12 +188,39 @@ export class SubscriptionsService {
       .eq('user_id', userId);
   }
 
+  /**
+   * Returns the effective group/member limits for a user.
+   * Custom overrides set by super-admins take priority over plan defaults.
+   */
+  async getEffectiveLimits(userId: string): Promise<{
+    groupLimit: number
+    memberLimit: number
+    isGroupLimitCustom: boolean
+    isMemberLimitCustom: boolean
+  }> {
+    const data = await this.subscriptionsRepo.findByUserId(userId);
+    const plan = await this.getUserPlan(userId);
+
+    const planGroupDefault = PLAN_GROUP_LIMITS[plan] ?? PLAN_GROUP_LIMITS['basic'];
+    const planMemberDefault = PLAN_MEMBER_LIMITS[plan] ?? PLAN_MEMBER_LIMITS['basic'];
+
+    const customGroup  = (data as any)?.custom_group_limit  ?? null;
+    const customMember = (data as any)?.custom_member_limit ?? null;
+
+    return {
+      groupLimit:          customGroup  !== null ? customGroup  : planGroupDefault,
+      memberLimit:         customMember !== null ? customMember : planMemberDefault,
+      isGroupLimitCustom:  customGroup  !== null,
+      isMemberLimitCustom: customMember !== null,
+    };
+  }
+
   async getUserPlan(userId: string): Promise<SubscriptionPlan> {
     const data = await this.subscriptionsRepo.findByUserId(userId);
 
     if (!data) return SubscriptionPlan.BASIC;
-    if (data.status === 'trialing') return data.plan as SubscriptionPlan;
-    if (data.status === 'active') {
+    if (data.status === SubscriptionStatus.TRIALING) return data.plan as SubscriptionPlan;
+    if (data.status === SubscriptionStatus.ACTIVE) {
       if (
         data.current_period_end &&
         new Date(data.current_period_end) < new Date()

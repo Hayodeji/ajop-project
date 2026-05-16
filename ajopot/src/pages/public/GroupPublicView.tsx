@@ -4,7 +4,7 @@ import { getPublicGroup } from '@/lib/api'
 import { Badge } from '@/components/ui/Badge'
 import { Spinner } from '@/components/ui/Spinner'
 import { formatKobo, formatDate } from '@/lib/utils'
-import { ContributionStatus } from '@/types'
+import { ContributionStatus, GroupMember, Contribution } from '@/types'
 
 const STATUS_TONE: Record<ContributionStatus, 'success' | 'warning' | 'danger'> = {
   paid: 'success',
@@ -39,7 +39,7 @@ const GroupPublicView = () => {
     )
 
   const { group, members, contributions } = data
-  const contribMap = Object.fromEntries(contributions.map((c) => [c.member_id, c]))
+  const contribMap = Object.fromEntries(contributions.map((c: Contribution) => [c.member_id, c]))
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -66,7 +66,7 @@ const GroupPublicView = () => {
             Member Status — Cycle #{group.current_cycle}
           </h2>
           <div className="space-y-2">
-            {members.map((m) => {
+            {members.map((m: GroupMember) => {
               const contrib = contribMap[m.id]
               const status: ContributionStatus = contrib?.status ?? 'pending'
               return (

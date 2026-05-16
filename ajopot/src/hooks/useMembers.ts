@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { getMembers, inviteMember, removeMember } from '@/lib/api'
+import { getMembers, inviteMember, removeMember, updateMember } from '@/lib/api'
 import toast from 'react-hot-toast'
 
 export const useMembers = (groupId: string) =>

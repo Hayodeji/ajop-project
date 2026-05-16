@@ -1,16 +1,17 @@
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { cn } from '@/lib/utils'
+import { useIdleLogout } from '@/hooks/useIdleLogout'
 
 const NAV = [
   { to: '/admin/dashboard', label: 'Overview', icon: '📊' },
   { to: '/admin/users', label: 'Users', icon: '👥' },
-  { to: '/admin/groups', label: 'Groups', icon: '🫙' },
   { to: '/admin/subscriptions', label: 'Subscriptions', icon: '💳' },
-  { to: '/admin/activity', label: 'Activity', icon: '📋' },
+  { to: '/admin/engagement', label: 'Engagement', icon: '📈' },
 ]
 
 const AdminShell = () => {
+  useIdleLogout()
   const navigate = useNavigate()
 
   const handleSignOut = async () => {

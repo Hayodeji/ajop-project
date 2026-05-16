@@ -160,6 +160,47 @@ export class AdminService {
     return data
   }
 
+  /**
+   * Set or clear custom per-user group/member limits.
+   * Passing null clears the override and reverts to plan defaults.
+   */
+  async setUserLimits(
+    userId: string,
+    limits: {
+      custom_group_limit:  number | null
+      custom_member_limit: number | null
+      limits_note?:        string | null
+    },
+  ) {
+    const db = this.supabase.getAdminClient()
+
+    // Ensure a subscription row exists before patching limits
+    const { data: existing } = await db
+      .from('subscriptions')
+      .select('id, plan')
+      .eq('user_id', userId)
+      .maybeSingle()
+
+    if (!existing) {
+      throw new Error(`No subscription found for user ${userId}. Assign a plan first.`)
+    }
+
+    const { data, error } = await db
+      .from('subscriptions')
+      .update({
+        custom_group_limit:  limits.custom_group_limit,
+        custom_member_limit: limits.custom_member_limit,
+        limits_note:         limits.limits_note ?? null,
+      })
+      .eq('user_id', userId)
+      .select()
+      .single()
+
+    if (error) throw new Error(error.message)
+    return data
+  }
+
+
   async getGroups(page = 1, limit = 20, search?: string) {
     const db = this.supabase.getAdminClient()
     const from = (page - 1) * limit

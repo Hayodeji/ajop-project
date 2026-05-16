@@ -37,4 +37,9 @@ export class PayoutsResolver {
     const members = await this.membersService.getMembers(payout.group_id, user.id)
     return members.find(m => m.id === payout.member_id)
   }
+
+  @ResolveField()
+  created_at(@Parent() payout: any) {
+    return payout.created_at || payout.paid_out_at
+  }
 }
