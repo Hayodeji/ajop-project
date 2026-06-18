@@ -9,7 +9,7 @@ import axios from 'axios';
 import { ConfigService } from '@nestjs/config';
 import { SupabaseService } from '../supabase/supabase.service';
 import { SubscriptionsRepo } from './subscriptions.repo';
-import { SubscriptionPlan, SubscriptionStatus, PLAN_AMOUNTS } from './subscriptions.schema';
+import { SubscriptionPlan, SubscriptionStatus, PLAN_AMOUNTS, PLAN_GROUP_LIMITS, PLAN_MEMBER_LIMITS } from './subscriptions.schema';
 
 @Injectable()
 export class SubscriptionsService {
@@ -87,13 +87,40 @@ export class SubscriptionsService {
     };
     if (reference) payload.paystack_reference = reference;
 
-    await this.subscriptionsRepo.upsert({ user_id: userId, ...payload });
+    const existing = await this.subscriptionsRepo.findByUserId(userId);
+    
+    if (existing) {
+      await this.subscriptionsRepo.update(userId, payload);
+    } else {
+      await this.subscriptionsRepo.upsert({ user_id: userId, ...payload });
+    }
+
     await this.syncProfilePlan(userId, plan);
   }
 
   async selectPlan(userId: string, plan: SubscriptionPlan) {
+    const existing = await this.subscriptionsRepo.findByUserId(userId);
+
+    if (existing) {
+      const now = new Date();
+      let isExpired = true;
+      if (existing.status === SubscriptionStatus.TRIALING && existing.trial_ends_at) {
+        isExpired = new Date(existing.trial_ends_at) < now;
+      } else if (existing.status === SubscriptionStatus.ACTIVE && existing.current_period_end) {
+        isExpired = new Date(existing.current_period_end) < now;
+      }
+
+      if (!isExpired && (existing.status === SubscriptionStatus.ACTIVE || existing.status === SubscriptionStatus.TRIALING)) {
+        throw new BadRequestException('Cannot change plan while your current subscription is still active.');
+      }
+
+      const data = await this.subscriptionsRepo.update(userId, { plan });
+      await this.syncProfilePlan(userId, plan);
+      return this.mapSubscription(data);
+    }
+
     const trialEndsAt = new Date();
-    trialEndsAt.setDate(trialEndsAt.getDate() + 7);
+    trialEndsAt.setDate(trialEndsAt.getDate() + 14);
 
     try {
       const data = await this.subscriptionsRepo.upsert({

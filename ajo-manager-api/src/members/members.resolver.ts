@@ -28,6 +28,14 @@ export class MembersResolver {
     return this.membersService.getMembers(groupId, user.id)
   }
 
+  @Query(() => Member, { nullable: true })
+  member(
+    @CurrentUser() user: User,
+    @Args('id', { type: () => ID }) id: string,
+  ) {
+    return this.membersService.getMember(id, user.id)
+  }
+
   @Mutation(() => Member)
   updateMember(
     @CurrentUser() user: User,

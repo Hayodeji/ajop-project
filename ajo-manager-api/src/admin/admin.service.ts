@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common'
 import { SupabaseService } from '../supabase/supabase.service'
+import { SubscriptionStatus } from '../subscriptions/subscriptions.schema'
 
 @Injectable()
 export class AdminService {
@@ -18,8 +19,8 @@ export class AdminService {
     ] = await Promise.all([
       db.from('profiles').select('id', { count: 'exact', head: true }),
       db.from('groups').select('id', { count: 'exact', head: true }),
-      db.from('subscriptions').select('id', { count: 'exact', head: true }).eq('status', 'active'),
-      db.from('subscriptions').select('id', { count: 'exact', head: true }).eq('status', 'trial'),
+      db.from('subscriptions').select('id', { count: 'exact', head: true }).in('status', [SubscriptionStatus.ACTIVE]),
+      db.from('subscriptions').select('id', { count: 'exact', head: true }).eq('status', SubscriptionStatus.TRIALING),
       db.from('contributions').select('id', { count: 'exact', head: true }).eq('status', 'paid'),
       db.from('payouts').select('amount'),
     ])
@@ -151,9 +152,13 @@ export class AdminService {
     if (updates.plan) {
       await db
         .from('subscriptions')
-        .update({ plan: updates.plan, status: 'active' })
+        .update({ plan: updates.plan, status: SubscriptionStatus.ACTIVE })
         .eq('user_id', userId)
       await db.from('profiles').update({ plan: updates.plan, is_pro: updates.plan === 'pro' }).eq('user_id', userId)
+    }
+
+    if (updates.suspended !== undefined) {
+      await db.from('profiles').update({ is_suspended: updates.suspended }).eq('user_id', userId)
     }
 
     const { data } = await db.from('profiles').select('*').eq('user_id', userId).single()
@@ -241,7 +246,7 @@ export class AdminService {
           .from('contributions')
           .select('*')
           .eq('group_id', groupId)
-          .order('created_at', { ascending: false })
+          .order('paid_at', { ascending: false, nullsFirst: false })
           .limit(50),
         db
           .from('payouts')
@@ -326,5 +331,105 @@ export class AdminService {
     return activity
       .sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime())
       .slice(0, limit)
+  }
+
+  async removeUser(userId: string) {
+    const db = this.supabase.getAdminClient()
+
+    // 1. Check if user has groups. If they do, we shouldn't delete them as it orphans data.
+    const { count: groupCount } = await db
+      .from('groups')
+      .select('id', { count: 'exact', head: true })
+      .eq('admin_id', userId)
+
+    if (groupCount && groupCount > 0) {
+      throw new Error('Cannot remove an admin with existing groups. Please use the "Lock Admin" feature instead.')
+    }
+
+    // 2. Delete non-critical related records first
+    await db.from('subscriptions').delete().eq('user_id', userId)
+    await db.from('notifications').delete().eq('user_id', userId)
+
+    // 3. Delete Supabase Auth user (cascades profile if FK is set, but we also manually clean it)
+    const { error } = await this.supabase.getAdminClient().auth.admin.deleteUser(userId)
+    if (error) {
+      throw new Error(`Failed to delete auth user: ${error.message}`)
+    }
+
+    await db.from('profiles').delete().eq('user_id', userId)
+
+    return { success: true }
+  }
+
+  async getEngagement() {
+    const db = this.supabase.getAdminClient()
+
+    // Weekly signups over the last 8 weeks
+    const eightWeeksAgo = new Date()
+    eightWeeksAgo.setDate(eightWeeksAgo.getDate() - 56)
+    const { data: recentProfiles } = await db
+      .from('profiles')
+      .select('created_at')
+      .gte('created_at', eightWeeksAgo.toISOString())
+      .order('created_at', { ascending: true })
+
+    // Build weekly buckets
+    const weekMap: Record<string, number> = {}
+    for (let i = 7; i >= 0; i--) {
+      const d = new Date()
+      d.setDate(d.getDate() - i * 7)
+      const key = this.getISOWeek(d)
+      weekMap[key] = 0
+    }
+    for (const p of recentProfiles ?? []) {
+      const key = this.getISOWeek(new Date(p.created_at))
+      if (key in weekMap) weekMap[key]++
+    }
+    const weeklySignups = Object.entries(weekMap).map(([week, count]) => ({ week, count }))
+
+    // Plan distribution
+    const { data: subs } = await db.from('subscriptions').select('plan, status')
+    const planDistribution: Record<string, number> = { basic: 0, smart: 0, pro: 0 }
+    const statusDistribution: Record<string, number> = { trialing: 0, active: 0, expired: 0, cancelled: 0, payment_failed: 0 }
+    let trialCount = 0
+    let activatedCount = 0
+    for (const s of subs ?? []) {
+      if (s.plan && planDistribution[s.plan] !== undefined) planDistribution[s.plan]++
+      if (s.status && statusDistribution[s.status] !== undefined) statusDistribution[s.status]++
+      if (s.status === SubscriptionStatus.TRIALING) trialCount++
+      if (s.status === SubscriptionStatus.ACTIVE) activatedCount++
+    }
+    const totalSubUsers = trialCount + activatedCount
+    const conversionRate = totalSubUsers > 0 ? Math.round((activatedCount / totalSubUsers) * 100) : 0
+
+    // Avg groups per user
+    const { count: totalGroups } = await db.from('groups').select('id', { count: 'exact', head: true })
+    const { count: totalUsers } = await db.from('profiles').select('id', { count: 'exact', head: true })
+    const avgGroupsPerUser = totalUsers && totalUsers > 0 ? Math.round(((totalGroups ?? 0) / totalUsers) * 10) / 10 : 0
+
+    // Total members managed
+    const { count: totalMembers } = await db.from('group_members').select('id', { count: 'exact', head: true }).eq('is_active', true)
+
+    // Churned this month (status became expired/cancelled in last 30 days — best effort via updated_at if available)
+    const monthAgo = new Date()
+    monthAgo.setDate(monthAgo.getDate() - 30)
+
+    return {
+      weeklySignups,
+      planDistribution,
+      statusDistribution,
+      conversionRate,
+      avgGroupsPerUser,
+      totalMembersManaged: totalMembers ?? 0,
+    }
+  }
+
+  private getISOWeek(date: Date): string {
+    const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()))
+    const dayNum = d.getUTCDay() || 7
+    d.setUTCDate(d.getUTCDate() + 4 - dayNum)
+    const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1))
+    const weekNo = Math.ceil((((d.getTime() - yearStart.getTime()) / 86400000) + 1) / 7)
+    return `${d.getUTCFullYear()}-W${String(weekNo).padStart(2, '0')}`
   }
 }

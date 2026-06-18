@@ -25,4 +25,13 @@ export class Member {
 
   @Field()
   joined_at: Date
+
+  @Field({ nullable: true })
+  bank_name?: string
+
+  @Field({ nullable: true })
+  account_number?: string
+
+  @Field({ nullable: true })
+  account_name?: string
 }

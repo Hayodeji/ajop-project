@@ -45,8 +45,8 @@ export class Contribution {
   @Field({ nullable: true })
   marked_by?: string
 
-  @Field()
-  due_date: Date
+  @Field({ nullable: true })
+  due_date?: Date
 
   @Field({ nullable: true })
   created_at?: Date

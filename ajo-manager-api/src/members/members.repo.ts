@@ -16,6 +16,9 @@ export class MembersRepo {
         name: input.name,
         phone: input.phone,
         payout_position: input.payout_position,
+        bank_name: input.bank_name,
+        account_number: input.account_number,
+        account_name: input.account_name,
       })
       .select()
       .single()
@@ -43,6 +46,7 @@ export class MembersRepo {
       .select('*')
       .eq('group_id', groupId)
       .eq('payout_position', position)
+      .eq('is_active', true)
       .maybeSingle()
 
     if (error) throw error
@@ -55,6 +59,7 @@ export class MembersRepo {
       .from('group_members')
       .select('*')
       .eq('group_id', groupId)
+      .eq('is_active', true)
       .order('payout_position', { ascending: true })
 
     if (error) throw error

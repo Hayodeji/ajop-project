@@ -120,6 +120,14 @@ export class SubscriptionsCron {
       .from('subscriptions')
       .update({ status: 'payment_failed', retry_count: newCount })
       .eq('user_id', userId);
+
+    if (newCount >= 3 || currentRetries === undefined) {
+      await this.supabase
+        .getAdminClient()
+        .from('profiles')
+        .update({ is_suspended: true })
+        .eq('user_id', userId);
+    }
   }
 
   private async sendWhatsApp(phone: string, message: string): Promise<void> {

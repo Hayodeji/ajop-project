@@ -101,7 +101,6 @@ export class ContributionsService {
             member_id: m.id,
             cycle_number: nextCycle,
             status: 'pending',
-            due_date: dueDate.toISOString(),
           }))
           await this.contributionsRepo.bulkInsert(inserts)
         }

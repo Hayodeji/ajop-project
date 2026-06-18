@@ -1,4 +1,4 @@
-import { Controller, Get, Patch, Param, Query, Body, UseGuards } from '@nestjs/common'
+import { Controller, Get, Delete, Patch, Param, Query, Body, UseGuards, HttpCode, HttpStatus } from '@nestjs/common'
 import { AdminService } from './admin.service'
 import { SuperAdminGuard } from '../common/guards/super-admin.guard'
 
@@ -69,5 +69,16 @@ export class AdminController {
   @Get('activity')
   getActivity(@Query('limit') limit = '50') {
     return this.adminService.getActivity(Number(limit))
+  }
+
+  @Get('engagement')
+  getEngagement() {
+    return this.adminService.getEngagement()
+  }
+
+  @Delete('users/:userId')
+  @HttpCode(HttpStatus.OK)
+  removeUser(@Param('userId') userId: string) {
+    return this.adminService.removeUser(userId)
   }
 }

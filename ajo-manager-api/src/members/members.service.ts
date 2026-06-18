@@ -32,6 +32,13 @@ export class MembersService {
     }
   }
 
+  async getMember(memberId: string, adminId: string): Promise<Member | null> {
+    const member = await this.membersRepo.findById(memberId)
+    if (!member) throw new NotFoundException('Member not found.')
+    await this.validateGroupOwnership(member.group_id, adminId)
+    return member
+  }
+
   async inviteMember(adminId: string, input: CreateMemberInput): Promise<Member> {
     const groupData = await this.validateGroupOwnership(input.group_id, adminId)
 
@@ -84,7 +91,6 @@ export class MembersService {
       member_id: member.id,
       cycle_number: groupData.current_cycle,
       status: 'pending',
-      due_date: dueDate.toISOString(),
     })
 
     // Send WhatsApp notification

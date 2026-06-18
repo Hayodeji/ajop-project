@@ -20,7 +20,7 @@ input CompleteProfileInput {
 type Contribution {
   created_at: DateTime
   cycle_number: Int!
-  due_date: DateTime!
+  due_date: DateTime
   group_id: ID!
   id: ID!
   marked_by: String
@@ -57,6 +57,9 @@ input CreateGroupInput {
 }
 
 input CreateMemberInput {
+  account_name: String
+  account_number: String
+  bank_name: String
   group_id: ID!
   name: String!
   payout_position: Int!
@@ -106,6 +109,9 @@ input InitiatePaymentInput {
 }
 
 type Member {
+  account_name: String
+  account_number: String
+  bank_name: String
   group_id: ID!
   id: ID!
   is_active: Boolean!
@@ -167,6 +173,9 @@ type PublicGroupResponse {
 }
 
 type PublicMember {
+  account_name: String
+  account_number: String
+  bank_name: String
   group_id: ID!
   id: ID!
   is_active: Boolean!
@@ -181,6 +190,7 @@ type Query {
   contributions(fromDate: String, groupId: ID!, toDate: String): [Contribution!]!
   group(id: String!): Group!
   groups: [Group!]!
+  member(id: ID!): Member
   members(groupId: ID!): [Member!]!
   mySubscription: Subscription
   payouts(groupId: ID!): [Payout!]!
@@ -235,6 +245,9 @@ input UpdateGroupInput {
 }
 
 input UpdateMemberInput {
+  account_name: String
+  account_number: String
+  bank_name: String
   group_id: ID
   id: ID!
   name: String

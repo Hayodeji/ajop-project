@@ -15,7 +15,7 @@ async function run() {
   for (const phone of phones) {
     const user = userList.find((u) => u.phone === phone || u.phone === phone.replace('+', ''))
     if (!user) { console.log('Not found:', phone); continue }
-    const { error } = await admin.auth.admin.updateUserById(user.id, { password: 'Ajopot_123*#,' })
+    const { error } = await admin.auth.admin.updateUserById(user.id, { password: 'Ajopot_admin123' })
     if (error) console.log('Error:', phone, error.message)
     else console.log('Password reset:', phone, '(id:', user.id + ')')
   }

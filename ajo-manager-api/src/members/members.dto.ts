@@ -28,6 +28,18 @@ export class CreateMemberInput {
   @IsInt()
   @Min(1)
   payout_position: number
+
+  @Field({ nullable: true })
+  @IsString()
+  bank_name?: string
+
+  @Field({ nullable: true })
+  @IsString()
+  account_number?: string
+
+  @Field({ nullable: true })
+  @IsString()
+  account_name?: string
 }
 
 @InputType()
