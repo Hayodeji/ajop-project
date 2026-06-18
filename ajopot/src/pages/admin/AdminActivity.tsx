@@ -3,16 +3,27 @@ import { adminGetActivity } from '@/lib/adminApi'
 import { Spinner } from '@/components/ui/Spinner'
 import { formatDate } from '@/lib/utils'
 
-const ICONS: Record<string, string> = { signup: '👤', payout: '💸', group: '🫙', subscription: '💳' }
+const ICONS: Record<string, string> = {
+  signup: '👤',
+  payout: '💸',
+  group: '🫙',
+  subscription: '💳',
+  member: '🤝',
+  contribution: '✅',
+  info: '📌',
+}
 const COLORS: Record<string, string> = {
   signup: 'bg-blue-500/10 border-blue-500/20 text-blue-400',
   payout: 'bg-green-500/10 border-green-500/20 text-green-400',
   group: 'bg-purple-500/10 border-purple-500/20 text-purple-400',
   subscription: 'bg-amber-500/10 border-amber-500/20 text-amber-400',
+  member: 'bg-indigo-500/10 border-indigo-500/20 text-indigo-400',
+  contribution: 'bg-teal-500/10 border-teal-500/20 text-teal-400',
+  info: 'bg-slate-700 border-slate-600 text-slate-300',
 }
 
 const AdminActivity = () => {
-  const { data: activity, isLoading } = useQuery({ queryKey: ['admin-activity'], queryFn: adminGetActivity })
+  const { data: activity, isLoading } = useQuery({ queryKey: ['admin-activity'], queryFn: adminGetActivity, refetchInterval: 30_000 })
 
   if (isLoading) return <div className="flex justify-center py-20"><Spinner size="lg" /></div>
 

@@ -1,5 +1,4 @@
 import { useContributions, useMarkContribution } from '@/hooks/useContributions'
-import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
 import { Spinner } from '@/components/ui/Spinner'
 import { formatDate } from '@/lib/utils'
@@ -22,31 +21,46 @@ export const ContributionsTab = ({ group }: Props) => {
   const markContribution = useMarkContribution(id)
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <CycleCalendar contributions={contributions || []} currentCycle={group.current_cycle} />
       
       {contribLoading ? (
-        <div className="flex justify-center py-8"><Spinner /></div>
+        <div className="flex justify-center py-12"><Spinner size="lg" /></div>
       ) : (
-        <>
-          <h3 className="text-lg font-semibold text-gray-900 mt-6 mb-4">All Contributions</h3>
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+          <div className="p-6 border-b border-gray-100 bg-gray-50/50">
+            <h3 className="text-xl font-bold text-gray-900 tracking-tight">Contribution History</h3>
+            <p className="text-sm text-gray-500 mt-1">Track payments across all cycles.</p>
+          </div>
+          
           {contributions?.length === 0 && (
-            <p className="text-gray-400 text-sm text-center py-8">No contributions recorded</p>
+            <div className="p-12 text-center">
+              <span className="text-4xl mb-4 block">💸</span>
+              <p className="text-gray-500 font-medium">No contributions recorded yet.</p>
+            </div>
           )}
-          {contributions?.map((c) => {
-            const memberInfo = (c as any).group_members
-            return (
-              <Card key={c.id} className="p-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <div className="font-medium text-gray-900">{memberInfo?.name ?? 'Unknown'}</div>
-                    <div className="text-sm text-gray-500">
-                      Cycle #{c.cycle_number} · {c.paid_at ? formatDate(c.paid_at) : '—'}
+          
+          <div className="divide-y divide-gray-100">
+            {contributions?.map((c) => {
+              const memberInfo = c.member
+              return (
+                <div key={c.id} className="p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-gray-50/50 transition-colors">
+                  <div className="flex items-center gap-4">
+                    <div className="hidden sm:flex w-10 h-10 rounded-full bg-gray-100 items-center justify-center text-gray-400">
+                      💳
+                    </div>
+                    <div>
+                      <div className="font-bold text-gray-900 text-lg tracking-tight mb-1">{memberInfo?.name ?? 'Unknown'}</div>
+                      <div className="flex items-center gap-2 text-sm text-gray-500 font-medium">
+                        <span className="px-2 py-0.5 rounded bg-gray-100 text-gray-600 font-semibold text-xs">Cycle #{c.cycle_number}</span>
+                        <span>•</span>
+                        <span>{c.paid_at ? `Paid on ${formatDate(c.paid_at)}` : 'Awaiting payment'}</span>
+                      </div>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <Badge tone={STATUS_TONE[c.status]}>{c.status}</Badge>
-                    {c.status !== 'paid' && (
+                  <div className="flex items-center justify-between sm:justify-end w-full sm:w-auto gap-4">
+                    <Badge tone={STATUS_TONE[c.status.toLowerCase() as ContributionStatus]} className="px-3 py-1 text-xs uppercase tracking-wider font-bold">{c.status}</Badge>
+                    {c.status.toLowerCase() !== 'paid' && (
                       <button
                         onClick={() =>
                           markContribution.mutate({
@@ -55,17 +69,17 @@ export const ContributionsTab = ({ group }: Props) => {
                             status: 'paid',
                           })
                         }
-                        className="text-xs text-green-600 hover:text-green-800 font-medium"
+                        className="px-4 py-2 rounded-xl text-sm font-bold bg-emerald-50 text-emerald-700 hover:bg-emerald-600 hover:text-white hover:shadow-md transition-all duration-300"
                       >
-                        Mark paid
+                        Mark as Paid
                       </button>
                     )}
                   </div>
                 </div>
-              </Card>
-            )
-          })}
-        </>
+              )
+            })}
+          </div>
+        </div>
       )}
     </div>
   )

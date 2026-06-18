@@ -60,7 +60,19 @@ const GroupMembersPage = () => {
                       {m.payout_position}
                     </div>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{m.name}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                    <Link
+                      to={`/groups/${id}/members/${m.id}`}
+                      className="font-medium text-gray-900 hover:text-green-600 transition-colors"
+                    >
+                      {m.name}
+                    </Link>
+                    {m.bank_name && (
+                      <div className="text-xs text-gray-400 mt-0.5">
+                        {m.bank_name} • {m.account_number}
+                      </div>
+                    )}
+                  </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{m.phone}</td>
                   <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                     <div className="flex justify-end gap-3">

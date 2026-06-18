@@ -119,6 +119,7 @@ const LoginPage = () => {
                   try {
                     const { adminGetStats } = await import('@/lib/adminApi')
                     await adminGetStats()
+                    useAuthStore.getState().setIsAdmin(true)
                     toast.success('Welcome back, Admin')
                     navigate('/admin/dashboard', { replace: true })
                     return
@@ -218,7 +219,7 @@ const LoginPage = () => {
         </div>
 
         <p className="mt-8 text-center text-xs text-slate-400 font-medium px-10 leading-relaxed">
-          Securely encrypted by Supabase Auth. By continuing you agree to our 
+         By continuing you agree to our 
           <a href="#" className="text-slate-600 hover:underline mx-1">Terms</a> and 
           <a href="#" className="text-slate-600 hover:underline ml-1">Privacy Policy</a>.
         </p>

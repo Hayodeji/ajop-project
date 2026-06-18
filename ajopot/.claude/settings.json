@@ -1,0 +1,25 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//home/weirdsoul/Desktop/ajop-project/ajo-manager-api/scripts/**)",
+      "Read(//home/weirdsoul/Desktop/ajop-project/ajo-manager-api/src/admin/**)",
+      "Bash(find /home/weirdsoul/Desktop/ajop-project/ajo-manager-api/src -name \"main.ts\" -o -name \"app.module.ts\" | head -5)",
+      "Read(//home/weirdsoul/Desktop/ajop-project/ajo-manager-api/src/**)",
+      "Read(//home/weirdsoul/Desktop/ajop-project/ajo-manager-api/**)",
+      "Bash(curl -s http://localhost:3000/api/health)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:3000/api/health)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" \"https://rrsnpaygmrzspjbrksif.supabase.co/auth/v1/health\")",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" \"https://google.com\")",
+      "Bash(echo \"exit: $?\")",
+      "Bash(find /home/weirdsoul/Desktop/ajop-project -name \"*.sql\" -o -name \"supabase\" -type d 2>/dev/null | head -30; echo \"---\"; find /home/weirdsoul/Desktop/ajop-project -path \"*/supabase/migrations*\" -o -path \"*/supabase/seed*\" 2>/dev/null | head -20; echo \"---\"; ls /home/weirdsoul/Desktop/ajop-project/ 2>/dev/null)",
+      "Read(//home/weirdsoul/Desktop/ajop-project/**)",
+      "Bash(npx tsc *)",
+      "Bash(curl -s \"http://localhost:3000/admin/groups?page=1&limit=20\" -H \"Authorization: Bearer test\")",
+      "Bash(curl -s \"http://localhost:3001/admin/groups?page=1&limit=20\" -H \"Authorization: Bearer test\")",
+      "Bash(grep -v \".tsx$\")"
+    ],
+    "additionalDirectories": [
+      "/home/weirdsoul/Desktop/ajop-project/ajo-manager-api"
+    ]
+  }
+}

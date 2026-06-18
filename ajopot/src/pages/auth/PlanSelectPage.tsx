@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import toast from 'react-hot-toast'
 import { Button } from '@/components/ui/Button'
-import { initiatePayment } from '@/lib/api'
+import { selectPlan } from '@/lib/api'
 import { SubscriptionPlan } from '@/types'
 
 const PLANS: {
@@ -65,10 +65,11 @@ const PlanSelectPage = () => {
   const handleSelect = async (plan: SubscriptionPlan) => {
     setLoading(plan)
     try {
-      const { authorization_url } = await initiatePayment(plan)
-      window.location.href = authorization_url
+      await selectPlan(plan)
+      toast.success('14-Day Free Trial started!')
+      window.location.href = '/dashboard'
     } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Could not start payment. Try again.'
+      const msg = err instanceof Error ? err.message : 'Could not start trial. Try again.'
       toast.error(msg)
       setLoading(null)
     }
@@ -78,14 +79,14 @@ const PlanSelectPage = () => {
     <div className="min-h-screen bg-gray-50 py-12 px-4">
       <div className="max-w-5xl mx-auto">
         <div className="text-center mb-10">
-          <div className="inline-block bg-amber-100 text-amber-800 text-sm font-medium px-3 py-1 rounded-full mb-4">
-            FOUNDING MEMBER OFFER — 50% off your first month on any plan
+          <div className="inline-block bg-green-100 text-green-800 text-sm font-medium px-4 py-1.5 rounded-full mb-4 shadow-sm border border-green-200">
+            ✨ All plans include a 14-Day Free Trial
           </div>
           <h1 className="text-3xl font-bold text-gray-900">
             Choose the plan that works for your group
           </h1>
-          <p className="text-gray-500 mt-2">
-            Secure payment via Paystack · Cancel anytime
+          <p className="text-gray-500 mt-3">
+            Secure payment via Paystack · Cancel anytime before your trial ends
           </p>
         </div>
 
@@ -128,14 +129,14 @@ const PlanSelectPage = () => {
                 disabled={loading !== null && loading !== p.plan}
                 onClick={() => handleSelect(p.plan)}
               >
-                Subscribe — {p.price}/mo
+                Start Free Trial
               </Button>
             </div>
           ))}
         </div>
 
         <p className="text-center text-xs text-gray-400 mt-8">
-          Payments are processed securely by Paystack. You will be billed monthly.
+          Payments are processed securely by Paystack. You will not be charged until your 14-day trial ends.
         </p>
       </div>
     </div>

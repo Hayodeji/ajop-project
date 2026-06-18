@@ -22,6 +22,9 @@ export interface GroupMember {
   payout_position: number
   is_active: boolean
   joined_at: string
+  bank_name?: string
+  account_number?: string
+  account_name?: string
 }
 
 export interface Contribution {
@@ -31,7 +34,9 @@ export interface Contribution {
   cycle_number: number
   status: ContributionStatus
   paid_at: string | null
+  due_date?: string | null
   marked_by: string
+  member?: { name: string; phone?: string }
 }
 
 export interface Payout {
@@ -60,7 +65,7 @@ export interface ApiError {
 }
 
 export type SubscriptionPlan = 'basic' | 'smart' | 'pro'
-export type SubscriptionStatus = 'trial' | 'active' | 'cancelled' | 'expired' | 'payment_failed'
+export type SubscriptionStatus = 'trialing' | 'active' | 'cancelled' | 'expired' | 'payment_failed'
 
 export interface Subscription {
   id: string

@@ -61,36 +61,57 @@ const GroupPublicView = () => {
           </div>
         </div>
 
-        <div>
-          <h2 className="text-sm font-semibold text-gray-700 mb-3 uppercase tracking-wider">
-            Member Status — Cycle #{group.current_cycle}
-          </h2>
-          <div className="space-y-2">
-            {members.map((m: GroupMember) => {
-              const contrib = contribMap[m.id]
-              const status: ContributionStatus = contrib?.status ?? 'pending'
-              return (
-                <div
-                  key={m.id}
-                  className="bg-white rounded-xl border border-gray-100 px-4 py-3 flex items-center justify-between"
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center text-xs font-bold text-green-700">
-                      {m.payout_position}
-                    </div>
-                    <div>
-                      <div className="font-medium text-gray-900 text-sm">
-                        {m.name} <span className="text-gray-400 font-normal">({m.phone || 'N/A'})</span>
-                      </div>
-                      {contrib?.paid_at && (
-                        <div className="text-xs text-gray-400">{formatDate(contrib.paid_at)}</div>
-                      )}
-                    </div>
-                  </div>
-                  <Badge tone={STATUS_TONE[status]}>{status}</Badge>
-                </div>
-              )
-            })}
+        <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden shadow-sm">
+          <div className="px-6 py-5 border-b border-gray-100 bg-gray-50/50">
+            <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wider">
+              Member Status — Cycle #{group.current_cycle}
+            </h2>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm text-left">
+              <thead className="bg-gray-50/80 text-gray-400 text-xs uppercase font-bold tracking-wider">
+                <tr>
+                  <th className="px-6 py-4">Pos</th>
+                  <th className="px-6 py-4">Member Name</th>
+                  <th className="px-6 py-4">Contact</th>
+                  <th className="px-6 py-4">Paid On</th>
+                  <th className="px-6 py-4 text-right">Status</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-50">
+                {members.map((m: GroupMember) => {
+                  const contrib = contribMap[m.id]
+                  const status: ContributionStatus = contrib?.status ?? 'pending'
+                  
+                  // Simple phone masking for public view
+                  const maskedPhone = m.phone && m.phone.length > 8 
+                    ? m.phone.replace(/(\+\d{3})(\d{4})(\d+)/, '$1****$3') 
+                    : m.phone || 'N/A'
+
+                  return (
+                    <tr key={m.id} className="hover:bg-gray-50/50 transition-colors">
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="w-8 h-8 bg-green-50 rounded-full flex items-center justify-center text-xs font-bold text-green-700 border border-green-100">
+                          #{m.payout_position}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 font-semibold text-gray-900 whitespace-nowrap">
+                        {m.name}
+                      </td>
+                      <td className="px-6 py-4 text-gray-500 font-mono text-xs tracking-wider whitespace-nowrap">
+                        {maskedPhone}
+                      </td>
+                      <td className="px-6 py-4 text-gray-500 text-xs whitespace-nowrap">
+                        {contrib?.paid_at ? formatDate(contrib.paid_at) : '—'}
+                      </td>
+                      <td className="px-6 py-4 text-right whitespace-nowrap">
+                        <Badge tone={STATUS_TONE[status]}>{status}</Badge>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
           </div>
         </div>
 

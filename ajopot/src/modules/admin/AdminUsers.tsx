@@ -1,14 +1,12 @@
 import { useState } from 'react'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { adminGetUsers, adminUpdateUser } from '@/lib/adminApi'
+import { useQuery } from '@tanstack/react-query'
+import { adminGetUsers } from '@/lib/adminApi'
 import { Spinner } from '@/components/ui/Spinner'
 import { UsersTable } from './UsersTable'
-import toast from 'react-hot-toast'
 
 const AdminUsers = () => {
   const [page, setPage] = useState(1)
   const [search, setSearch] = useState('')
-  const qc = useQueryClient()
 
   const { data, isLoading } = useQuery({
     queryKey: ['admin-users', page, search],

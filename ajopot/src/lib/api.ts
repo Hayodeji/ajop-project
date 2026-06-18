@@ -173,37 +173,52 @@ export const deleteGroup = (id: string) =>
 export const getMembers = (groupId: string) =>
   gql<GroupMember[]>(`
     query Members($groupId: ID!) {
-      members(groupId: $groupId) { id name phone payout_position is_active }
+      members(groupId: $groupId) { id name phone payout_position is_active bank_name account_number account_name }
     }
   `, { groupId })
 
-export const inviteMember = (groupId: string, data: { name: string; phone: string; payoutPosition: number }) =>
+export const getMember = (id: string) =>
+  gql<GroupMember>(`
+    query Member($id: ID!) {
+      member(id: $id) { id group_id name phone payout_position is_active joined_at bank_name account_number account_name }
+    }
+  `, { id })
+
+export const inviteMember = (groupId: string, data: { name: string; phone: string; payoutPosition: number; bank_name?: string; account_number?: string; account_name?: string }) =>
   gql<GroupMember>(`
     mutation InviteMember($input: CreateMemberInput!) {
-      inviteMember(input: $input) { id name }
+      inviteMember(input: $input) { id name bank_name account_number account_name }
     }
   `, { 
     input: { 
       name: data.name,
       phone: data.phone,
       group_id: groupId, 
-      payout_position: data.payoutPosition 
+      payout_position: data.payoutPosition,
+      bank_name: data.bank_name,
+      account_number: data.account_number,
+      account_name: data.account_name,
     } 
   })
 
 export const removeMember = (_groupId: string, memberId: string) =>
   gql<boolean>(`
-    mutation RemoveMember($id: String!) {
+    mutation RemoveMember($id: ID!) {
       removeMember(id: $id)
     }
   `, { id: memberId })
 
-export const updateMember = (data: { id: string; name?: string; phone?: string; payout_position?: number }) =>
+export const updateMember = (data: { id: string; name?: string; phone?: string; payout_position?: number; bank_name?: string; account_number?: string; account_name?: string }) =>
   gql<GroupMember>(`
     mutation UpdateMember($input: UpdateMemberInput!) {
-      updateMember(input: $input) { id name phone payout_position }
+      updateMember(input: $input) { id name phone payout_position bank_name account_number account_name }
     }
   `, { input: data })
+
+export const sendReminders = async (groupId: string) => {
+  const { data } = await api.post(`/reminders/group/${groupId}`)
+  return data
+}
 
 // Contributions
 export const getContributions = (groupId: string, from?: string, to?: string) =>
@@ -226,7 +241,7 @@ export const markContribution = (groupId: string, data: { memberId: string; cycl
       group_id: groupId, 
       member_id: data.memberId, 
       cycle_number: data.cycleNumber, 
-      status: data.status 
+      status: data.status.toUpperCase()
     } 
   })
 

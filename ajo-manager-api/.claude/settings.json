@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//home/weirdsoul/Desktop/ajop-project/ajopot/src/pages/auth/**)",
+      "Bash(find /home/weirdsoul/Desktop/ajop-project/ajopot -name \"adminApi*\" -o -name \"*adminApi*\" 2>/dev/null)",
+      "Read(//home/weirdsoul/Desktop/ajop-project/ajopot/**)",
+      "Bash(ping -c 3 8.8.8.8)",
+      "Bash(curl -s --max-time 5 https://supabase.co -o /dev/null -w \"%{http_code}\")",
+      "Bash(nslookup rrsnpaygmrzspjbrksif.supabase.co)",
+      "Bash(nslookup supabase.co)"
+    ]
+  }
+}

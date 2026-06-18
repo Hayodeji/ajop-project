@@ -12,6 +12,7 @@ import DashboardPage from '@/pages/dashboard/DashboardPage'
 import GroupsPage from '@/pages/groups/GroupsPage'
 import GroupDetailPage from '@/pages/groups/GroupDetailPage'
 import GroupMembersPage from '@/pages/groups/GroupMembersPage'
+import MemberDetailPage from '@/pages/groups/MemberDetailPage'
 import GroupPublicView from '@/pages/public/GroupPublicView'
 import ProfilePage from '@/pages/ProfilePage'
 import AdminDashboard from '@/pages/admin/AdminDashboard'
@@ -19,6 +20,9 @@ import AdminUsers from '@/pages/admin/AdminUsers'
 import AdminUserDetail from '@/pages/admin/AdminUserDetail'
 import AdminSubscriptions from '@/pages/admin/AdminSubscriptions'
 import AdminEngagement from '@/pages/admin/AdminEngagement'
+import AdminActivity from '@/pages/admin/AdminActivity'
+import AdminGroups from '@/pages/admin/AdminGroups'
+import AdminGroupDetail from '@/pages/admin/AdminGroupDetail'
 import PaymentCallbackPage from '@/pages/PaymentCallbackPage'
 import NotFoundPage from '@/pages/NotFoundPage'
 
@@ -42,6 +46,9 @@ export const router = createBrowserRouter([
           { path: '/admin/users/:userId', element: <AdminUserDetail /> },
           { path: '/admin/subscriptions', element: <AdminSubscriptions /> },
           { path: '/admin/engagement', element: <AdminEngagement /> },
+          { path: '/admin/activity', element: <AdminActivity /> },
+          { path: '/admin/groups', element: <AdminGroups /> },
+          { path: '/admin/groups/:groupId', element: <AdminGroupDetail /> },
         ],
       },
     ],
@@ -62,6 +69,7 @@ export const router = createBrowserRouter([
           { path: '/groups', element: <GroupsPage /> },
           { path: '/groups/:id', element: <GroupDetailPage /> },
           { path: '/groups/:id/members', element: <GroupMembersPage /> },
+          { path: '/groups/:id/members/:memberId', element: <MemberDetailPage /> },
           { path: '/profile', element: <ProfilePage /> },
         ],
       },

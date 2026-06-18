@@ -30,4 +30,11 @@ export const FAQS = [
 ]
 
 export const PLAN_TONE: Record<string, any> = { basic: 'neutral', smart: 'info', pro: 'brand' }
-export const STATUS_TONE: Record<string, any> = { active: 'success', trial: 'warning', cancelled: 'danger', expired: 'danger' }
+export const STATUS_TONE: Record<string, any> = {
+  active: 'success',
+  trialing: 'warning',
+  trial: 'warning',       // legacy compat
+  payment_failed: 'danger',
+  cancelled: 'danger',
+  expired: 'danger',
+}

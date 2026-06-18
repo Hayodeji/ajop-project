@@ -37,8 +37,10 @@ export const SubscriptionSettings = () => {
               </div>
               <div>
                 <p className="text-2xl font-bold text-slate-900 capitalize">{sub.plan} Plan</p>
-                {sub.trial_ends_at && sub.status === 'trial' && (
-                  <p className="text-sm text-slate-500">Free trial ends on {formatDate(sub.trial_ends_at)}</p>
+                {sub.trial_ends_at && sub.status === 'trialing' && (
+                  <div className="mt-2 inline-flex items-center px-3 py-1 rounded-full bg-green-100 text-green-800 text-xs font-semibold border border-green-200">
+                    ✨ Free Trial ends {formatDate(sub.trial_ends_at)}
+                  </div>
                 )}
               </div>
             </div>
@@ -73,24 +75,42 @@ export const SubscriptionSettings = () => {
             </div>
 
             <div className="pt-6 border-t border-slate-100">
-              <p className="text-sm font-semibold text-slate-900 mb-4">Switch Plan</p>
+              <p className="text-sm font-semibold text-slate-900 mb-2">Switch Plan</p>
+              
+              {/* Active/Trialing Lock Warning */}
+              {(sub.status === 'active' || sub.status === 'trialing') && (
+                <div className="mb-4 bg-amber-50 border border-amber-200 text-amber-800 text-xs px-4 py-3 rounded-xl flex gap-3">
+                  <span className="text-lg">🔒</span>
+                  <p className="mt-0.5">
+                    Plan changes are currently locked because your {sub.status} period is ongoing. You can switch plans once your current cycle ends or by contacting support.
+                  </p>
+                </div>
+              )}
+
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                {(['basic', 'smart', 'pro'] as SubscriptionPlan[]).map((plan) => (
-                  <button
-                    key={plan}
-                    disabled={sub.plan.toLowerCase() === plan || planChanging}
-                    onClick={() => changePlan(plan)}
-                    className={`px-4 py-4 rounded-xl text-sm border-2 transition-all flex flex-col items-center justify-center gap-1 ${sub.plan.toLowerCase() === plan
-                        ? 'border-brand-600 bg-brand-50 text-brand-700 ring-4 ring-brand-50'
-                        : 'border-slate-100 hover:border-brand-200 text-slate-600 bg-white'
+                {(['basic', 'smart', 'pro'] as SubscriptionPlan[]).map((plan) => {
+                  const isCurrent = sub.plan.toLowerCase() === plan;
+                  const isLocked = sub.status === 'active' || sub.status === 'trialing';
+                  return (
+                    <button
+                      key={plan}
+                      disabled={isCurrent || isLocked || planChanging}
+                      onClick={() => changePlan(plan)}
+                      className={`px-4 py-4 rounded-xl text-sm border-2 transition-all flex flex-col items-center justify-center gap-1 ${
+                        isCurrent
+                          ? 'border-brand-600 bg-brand-50 text-brand-700 ring-4 ring-brand-50'
+                          : isLocked 
+                            ? 'border-slate-100 bg-slate-50 text-slate-400 cursor-not-allowed opacity-60' 
+                            : 'border-slate-100 hover:border-brand-200 text-slate-600 bg-white'
                       }`}
-                  >
-                    <span className="font-bold uppercase tracking-wide">{plan}</span>
-                    <span className="text-xs opacity-70">
-                      {plan === 'basic' ? '₦1,500' : plan === 'smart' ? '₦3,000' : '₦5,000'}/mo
-                    </span>
-                  </button>
-                ))}
+                    >
+                      <span className="font-bold uppercase tracking-wide">{plan}</span>
+                      <span className="text-xs opacity-70">
+                        {plan === 'basic' ? '₦1,500' : plan === 'smart' ? '₦3,000' : '₦5,000'}/mo
+                      </span>
+                    </button>
+                  )
+                })}
               </div>
             </div>
           </div>
