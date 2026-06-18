@@ -1,5 +1,6 @@
 import { Injectable, ForbiddenException, NotFoundException, Logger } from '@nestjs/common'
 import { SubscriptionsService } from '../subscriptions/subscriptions.service'
+import { AuditService } from '../audit/audit.service'
 import { GroupsRepo } from '../groups/groups.repo'
 import { MembersRepo } from '../members/members.repo'
 import { ContributionsRepo } from './contributions.repo'
@@ -15,6 +16,7 @@ export class ContributionsService {
     private readonly groupsRepo: GroupsRepo,
     private readonly membersRepo: MembersRepo,
     private readonly subscriptions: SubscriptionsService,
+    private readonly audit: AuditService,
   ) {}
 
   async getContributions(
@@ -69,6 +71,22 @@ export class ContributionsService {
     } catch (error) {
       this.logger.error(`Mark contribution failed: ${error.message}`)
       throw new NotFoundException('Could not mark contribution.')
+    }
+
+    if (input.status === ContributionStatus.PAID || input.status === ContributionStatus.LATE) {
+      const member = await this.membersRepo.findById(input.member_id)
+      void this.audit.log({
+        event_type: input.status === ContributionStatus.PAID ? 'contribution.paid' : 'contribution.late',
+        actor_id: adminId,
+        target_id: contribution.id,
+        meta: {
+          member_name: member?.name ?? 'Unknown',
+          group_id: input.group_id,
+          group_name: group.name,
+          cycle: input.cycle_number,
+          amount: group.contribution_amount,
+        },
+      })
     }
 
     // Late penalty tracking

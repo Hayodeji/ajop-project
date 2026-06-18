@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { cn } from '@/lib/utils'
@@ -6,24 +7,42 @@ import { useIdleLogout } from '@/hooks/useIdleLogout'
 const NAV = [
   { to: '/admin/dashboard', label: 'Overview', icon: '📊' },
   { to: '/admin/users', label: 'Users', icon: '👥' },
+  { to: '/admin/groups', label: 'Groups', icon: '🏦' },
   { to: '/admin/subscriptions', label: 'Subscriptions', icon: '💳' },
   { to: '/admin/engagement', label: 'Engagement', icon: '📈' },
+  { to: '/admin/activity', label: 'Activity', icon: '🕐' },
 ]
 
 const AdminShell = () => {
   useIdleLogout()
   const navigate = useNavigate()
+  const [sidebarOpen, setSidebarOpen] = useState(false)
 
   const handleSignOut = async () => {
     await supabase.auth.signOut()
     navigate('/login', { replace: true })
   }
 
+  const closeSidebar = () => setSidebarOpen(false)
+
   return (
     <div className="min-h-screen bg-slate-950 flex">
+      {/* Mobile backdrop */}
+      {sidebarOpen && (
+        <div
+          className="fixed inset-0 bg-black/60 z-20 lg:hidden"
+          onClick={closeSidebar}
+        />
+      )}
+
       {/* Sidebar */}
-      <aside className="w-56 bg-slate-900 border-r border-slate-800 flex flex-col">
-        <div className="px-5 py-5 border-b border-slate-800">
+      <aside
+        className={cn(
+          'fixed lg:static inset-y-0 left-0 z-30 w-56 bg-slate-900 border-r border-slate-800 flex flex-col transition-transform duration-200',
+          sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0',
+        )}
+      >
+        <div className="px-5 py-5 border-b border-slate-800 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <div className="h-8 w-8 rounded-lg bg-green-500 text-white font-bold flex items-center justify-center text-sm">A</div>
             <div>
@@ -31,13 +50,20 @@ const AdminShell = () => {
               <div className="text-slate-500 text-xs">Super Admin</div>
             </div>
           </div>
+          <button
+            onClick={closeSidebar}
+            className="lg:hidden text-slate-500 hover:text-white p-1"
+          >
+            ✕
+          </button>
         </div>
 
-        <nav className="flex-1 p-3 space-y-1">
+        <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
           {NAV.map((n) => (
             <NavLink
               key={n.to}
               to={n.to}
+              onClick={closeSidebar}
               className={({ isActive }) =>
                 cn(
                   'flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-colors',
@@ -64,8 +90,22 @@ const AdminShell = () => {
       </aside>
 
       {/* Main content */}
-      <main className="flex-1 overflow-auto">
-        <div className="max-w-6xl mx-auto px-6 py-8">
+      <main className="flex-1 overflow-auto min-w-0">
+        {/* Mobile top bar */}
+        <div className="lg:hidden flex items-center gap-3 px-4 py-3 bg-slate-900 border-b border-slate-800 sticky top-0 z-10">
+          <button
+            onClick={() => setSidebarOpen(true)}
+            className="text-slate-400 hover:text-white p-1 text-xl"
+          >
+            ☰
+          </button>
+          <div className="flex items-center gap-2">
+            <div className="h-6 w-6 rounded bg-green-500 text-white font-bold flex items-center justify-center text-xs">A</div>
+            <span className="text-white text-sm font-semibold">AjoPot Admin</span>
+          </div>
+        </div>
+
+        <div className="max-w-6xl mx-auto px-4 lg:px-6 py-6 lg:py-8">
           <Outlet />
         </div>
       </main>
@@ -73,5 +113,4 @@ const AdminShell = () => {
   )
 }
 
-
-export default AdminShell;
+export default AdminShell

@@ -1,14 +1,17 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { getMembers, inviteMember, removeMember, updateMember } from '@/lib/api'
+import { getMembers, getMember, inviteMember, removeMember, updateMember } from '@/lib/api'
 import toast from 'react-hot-toast'
 
 export const useMembers = (groupId: string) =>
   useQuery({ queryKey: ['members', groupId], queryFn: () => getMembers(groupId), enabled: !!groupId })
 
+export const useMember = (memberId: string) =>
+  useQuery({ queryKey: ['member', memberId], queryFn: () => getMember(memberId), enabled: !!memberId })
+
 export const useInviteMember = (groupId: string) => {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (data: { name: string; phone: string; payoutPosition: number }) => inviteMember(groupId, data),
+    mutationFn: (data: { name: string; phone: string; payoutPosition: number; bank_name?: string; account_number?: string; account_name?: string }) => inviteMember(groupId, data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['members', groupId] })
       qc.invalidateQueries({ queryKey: ['contributions', groupId] })
@@ -36,7 +39,7 @@ export const useRemoveMember = (groupId: string) => {
 export const useUpdateMember = (groupId: string) => {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (data: { id: string; name?: string; phone?: string; payout_position?: number }) => updateMember(data),
+    mutationFn: (data: { id: string; name?: string; phone?: string; payout_position?: number; bank_name?: string; account_number?: string; account_name?: string }) => updateMember(data),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['members', groupId] })
       qc.invalidateQueries({ queryKey: ['contributions', groupId] })

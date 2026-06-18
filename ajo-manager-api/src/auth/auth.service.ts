@@ -1,5 +1,6 @@
 import { Injectable, ConflictException, NotFoundException } from '@nestjs/common'
 import { SupabaseService } from '../supabase/supabase.service'
+import { AuditService } from '../audit/audit.service'
 import { AuthRepo } from './auth.repo'
 import { CompleteProfileInput, ForgotPasswordInput } from './auth.dto'
 
@@ -8,6 +9,7 @@ export class AuthService {
   constructor(
     private readonly supabase: SupabaseService,
     private readonly authRepo: AuthRepo,
+    private readonly audit: AuditService,
   ) {}
 
   async checkPhone(phone: string): Promise<{ isNewUser: boolean }> {
@@ -49,8 +51,9 @@ export class AuthService {
       await this.supabase.getAdminClient().auth.admin.updateUserById(userId, { email: input.email, email_confirm: true })
     }
 
+    let profile: any
     try {
-      return await this.authRepo.createProfile({
+      profile = await this.authRepo.createProfile({
         user_id: userId,
         phone: input.phone ?? authPhone ?? null,
         name: input.name,
@@ -62,6 +65,14 @@ export class AuthService {
     } catch (error) {
       throw new ConflictException(error.message)
     }
+
+    void this.audit.log({
+      event_type: 'user.signup',
+      actor_id: userId,
+      meta: { name: input.name, phone: input.phone ?? authPhone ?? null },
+    })
+
+    return profile
   }
 
   async getProfile(userId: string) {

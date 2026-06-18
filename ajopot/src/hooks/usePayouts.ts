@@ -3,7 +3,7 @@ import { getPayouts, recordPayout } from '@/lib/api'
 import toast from 'react-hot-toast'
 
 export const usePayouts = (groupId: string) =>
-  useQuery({ queryKey: ['payouts', groupId], queryFn: () => getPayouts(groupId), enabled: !!groupId })
+  useQuery({ queryKey: ['payouts', groupId], queryFn: () => getPayouts(groupId), enabled: !!groupId, refetchInterval: 30_000 })
 
 export const useRecordPayout = (groupId: string) => {
   const qc = useQueryClient()

@@ -10,7 +10,10 @@ export const useSelectPlan = () => {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (plan: SubscriptionPlan) => selectPlan(plan),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['subscription'] }); toast.success('Plan selected — 7-day trial started!') },
+    onSuccess: () => { 
+      qc.invalidateQueries({ queryKey: ['subscription'] })
+      toast.success('Subscription plan updated successfully!') 
+    },
     onError: (e: any) => toast.error(e.message || 'Failed to select plan'),
   })
 }

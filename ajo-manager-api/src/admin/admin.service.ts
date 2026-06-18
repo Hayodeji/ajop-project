@@ -213,7 +213,7 @@ export class AdminService {
 
     let query = db
       .from('groups')
-      .select('*, profiles!groups_admin_id_fkey(name, phone), group_members(count)', { count: 'exact' })
+      .select('*', { count: 'exact' })
       .order('created_at', { ascending: false })
       .range(from, to)
 
@@ -222,17 +222,29 @@ export class AdminService {
     }
 
     const { data, count, error } = await query
-    if (error) {
-      // fallback without join if FK alias fails
-      const fallback = await db
-        .from('groups')
-        .select('*, group_members(count)', { count: 'exact' })
-        .order('created_at', { ascending: false })
-        .range(from, to)
-      return { data: fallback.data ?? [], total: fallback.count ?? 0, page, limit }
+    if (error) throw new Error(error.message)
+
+    // Enrich with actual active member count per group
+    const groupIds = (data ?? []).map((g: any) => g.id)
+    const { data: memberCounts } = groupIds.length
+      ? await db
+          .from('group_members')
+          .select('group_id')
+          .in('group_id', groupIds)
+          .eq('is_active', true)
+      : { data: [] }
+
+    const countMap: Record<string, number> = {}
+    for (const m of memberCounts ?? []) {
+      countMap[m.group_id] = (countMap[m.group_id] ?? 0) + 1
     }
 
-    return { data: data ?? [], total: count ?? 0, page, limit }
+    return {
+      data: (data ?? []).map((g: any) => ({ ...g, active_member_count: countMap[g.id] ?? 0 })),
+      total: count ?? 0,
+      page,
+      limit,
+    }
   }
 
   async getGroupDetail(groupId: string) {
@@ -291,46 +303,80 @@ export class AdminService {
   async getActivity(limit = 50) {
     const db = this.supabase.getAdminClient()
 
-    const [
-      { data: recentUsers },
-      { data: recentPayouts },
-      { data: recentGroups },
-      { data: recentSubs },
-    ] = await Promise.all([
-      db.from('profiles').select('user_id, name, phone, created_at').order('created_at', { ascending: false }).limit(10),
-      db.from('payouts').select('id, amount, paid_out_at, group_id, group_members(name)').order('paid_out_at', { ascending: false }).limit(10),
-      db.from('groups').select('id, name, admin_id, created_at').order('created_at', { ascending: false }).limit(10),
-      db.from('subscriptions').select('id, user_id, plan, status, created_at').order('created_at', { ascending: false }).limit(10),
-    ])
+    const { data: logs, error } = await db
+      .from('audit_logs')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(limit)
 
-    // Fetch profiles for recent subs separately
-    const subUserIds = (recentSubs ?? []).map((s: any) => s.user_id)
-    const { data: subProfiles } = subUserIds.length
-      ? await db.from('profiles').select('user_id, name, phone').in('user_id', subUserIds)
+    if (error) throw new Error(error.message)
+    if (!logs?.length) return []
+
+    // Resolve actor profiles for display
+    const actorIds = [...new Set((logs).map((l: any) => l.actor_id).filter(Boolean))]
+    const { data: profiles } = actorIds.length
+      ? await db.from('profiles').select('user_id, name, phone').in('user_id', actorIds)
       : { data: [] }
-    const subProfileMap: Record<string, any> = {}
-    for (const p of subProfiles ?? []) subProfileMap[p.user_id] = p
+    const profileMap: Record<string, any> = {}
+    for (const p of profiles ?? []) profileMap[p.user_id] = p
 
-    const activity: any[] = []
+    return logs.map((log: any) => {
+      const actor = profileMap[log.actor_id] ?? null
+      const m = log.metadata ?? {}
+      let type = 'info'
+      let label = log.action
+      let meta = ''
 
-    for (const u of recentUsers ?? []) {
-      activity.push({ type: 'signup', label: `${u.name} signed up`, meta: u.phone, time: u.created_at })
-    }
-    for (const p of recentPayouts ?? []) {
-      const member = (p.group_members as any)?.name ?? 'Unknown'
-      activity.push({ type: 'payout', label: `Payout of ₦${((p.amount ?? 0) / 100).toLocaleString()} to ${member}`, meta: `Group ${p.group_id}`, time: p.paid_out_at })
-    }
-    for (const g of recentGroups ?? []) {
-      activity.push({ type: 'group', label: `New group created: ${g.name}`, meta: g.admin_id, time: g.created_at })
-    }
-    for (const s of recentSubs ?? []) {
-      const profile = subProfileMap[(s as any).user_id]
-      activity.push({ type: 'subscription', label: `${profile?.name ?? 'User'} selected ${(s as any).plan} plan (${(s as any).status})`, meta: profile?.phone ?? '', time: (s as any).created_at })
-    }
+      switch (log.action) {
+        case 'group.created':
+          type = 'group'
+          label = `New group created: "${m.name ?? 'Unknown'}"`
+          meta = actor ? `by ${actor.name}` : ''
+          break
+        case 'group.deleted':
+          type = 'group'
+          label = `Group deleted`
+          meta = actor ? `by ${actor.name}` : ''
+          break
+        case 'member.added':
+          type = 'member'
+          label = `${m.name ?? 'New member'} added to "${m.group_name ?? 'a group'}"`
+          meta = `Position #${m.position ?? '?'}`
+          break
+        case 'member.removed':
+          type = 'member'
+          label = `${m.name ?? 'Member'} removed from a group`
+          meta = actor ? `by ${actor.name}` : ''
+          break
+        case 'contribution.paid':
+          type = 'contribution'
+          label = `${m.member_name ?? 'Member'} paid contribution — cycle ${m.cycle ?? '?'}`
+          meta = m.group_name ? `in "${m.group_name}"` : ''
+          break
+        case 'contribution.late':
+          type = 'contribution'
+          label = `${m.member_name ?? 'Member'} marked late — cycle ${m.cycle ?? '?'}`
+          meta = m.group_name ? `in "${m.group_name}"` : ''
+          break
+        case 'payout.recorded':
+          type = 'payout'
+          label = `Payout of ₦${((m.amount ?? 0) / 100).toLocaleString()} recorded`
+          meta = m.group_name ? `in "${m.group_name}"` : ''
+          break
+        case 'user.signup':
+          type = 'signup'
+          label = `${m.name ?? 'User'} signed up`
+          meta = m.phone ?? ''
+          break
+        case 'subscription.activated':
+          type = 'subscription'
+          label = `${actor?.name ?? 'User'} activated ${m.plan ?? ''} plan`
+          meta = actor?.phone ?? ''
+          break
+      }
 
-    return activity
-      .sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime())
-      .slice(0, limit)
+      return { type, label, meta, time: log.created_at }
+    })
   }
 
   async removeUser(userId: string) {

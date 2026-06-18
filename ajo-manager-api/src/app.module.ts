@@ -16,6 +16,7 @@ import { PublicModule } from './public/public.module'
 import { RemindersModule } from './reminders/reminders.module'
 import { WebhookModule } from './webhook/webhook.module'
 import { AdminModule } from './admin/admin.module'
+import { AuditModule } from './audit/audit.module'
 import { AppController } from './app.controller'
 
 @Module({
@@ -34,6 +35,7 @@ import { AppController } from './app.controller'
       path: '/api/graphql', // Mounting it under /api/graphql for consistency
     }),
     SupabaseModule,
+    AuditModule,
     AuthModule,
     GroupsModule,
     SubscriptionsModule,

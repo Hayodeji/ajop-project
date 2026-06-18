@@ -2,6 +2,8 @@ import { NavLink, Outlet } from 'react-router-dom'
 import { cn } from '@/lib/utils'
 import { useIdleLogout } from '@/hooks/useIdleLogout'
 
+import { useSubscription } from '@/hooks/useSubscription'
+
 const NAV = [
   { to: '/dashboard', label: 'Dashboard' },
   { to: '/groups', label: 'Groups' },
@@ -10,9 +12,25 @@ const NAV = [
 
 const AppShell = () => {
   useIdleLogout()
+  const { data: sub } = useSubscription()
+
+  let trialDaysLeft = 0
+  if (sub?.status === 'trialing' && sub.trial_ends_at) {
+    const end = new Date(sub.trial_ends_at)
+    const now = new Date()
+    trialDaysLeft = Math.max(0, Math.ceil((end.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)))
+  }
 
   return (
     <div className="min-h-screen flex flex-col">
+      {sub?.status === 'trialing' && (
+        <div className="bg-amber-100 text-amber-800 px-4 py-2 text-center text-sm font-medium">
+          You have {trialDaysLeft} days left in your free trial.{' '}
+          <NavLink to="/profile" className="underline hover:text-amber-900">
+            View plans
+          </NavLink>
+        </div>
+      )}
       <header className="sticky top-0 z-10 bg-white/90 backdrop-blur border-b border-slate-200">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">
           <div className="flex items-center gap-2">

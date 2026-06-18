@@ -1,5 +1,6 @@
 import { Injectable, ForbiddenException, NotFoundException, Logger } from '@nestjs/common'
 import { GroupsRepo } from '../groups/groups.repo'
+import { AuditService } from '../audit/audit.service'
 import { PayoutsRepo } from './payouts.repo'
 import { CreatePayoutInput } from './payouts.dto'
 import { Payout } from './payouts.schema'
@@ -11,6 +12,7 @@ export class PayoutsService {
   constructor(
     private readonly payoutsRepo: PayoutsRepo,
     private readonly groupsRepo: GroupsRepo,
+    private readonly audit: AuditService,
   ) {}
 
   async getPayouts(groupId: string, adminId: string): Promise<Payout[]> {
@@ -24,14 +26,30 @@ export class PayoutsService {
   }
 
   async recordPayout(adminId: string, input: CreatePayoutInput): Promise<Payout> {
-    await this.validateGroupOwnership(input.group_id, adminId)
+    const group = await this.validateGroupOwnership(input.group_id, adminId)
 
+    let payout: Payout
     try {
-      return await this.payoutsRepo.create(input)
+      payout = await this.payoutsRepo.create(input)
     } catch (error) {
       this.logger.error(`Record payout failed: ${error.message}`)
       throw new NotFoundException('Could not record payout.')
     }
+
+    void this.audit.log({
+      event_type: 'payout.recorded',
+      actor_id: adminId,
+      target_id: payout.id,
+      meta: {
+        group_id: input.group_id,
+        group_name: group.name,
+        member_id: (input as any).member_id ?? null,
+        amount: input.amount,
+        cycle: (input as any).cycle_number ?? null,
+      },
+    })
+
+    return payout
   }
 
   private async validateGroupOwnership(groupId: string, adminId: string) {

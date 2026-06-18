@@ -14,83 +14,103 @@ export class SubscriptionsCron {
     private readonly config: ConfigService,
   ) {}
 
+  // Fetch profiles by user_ids and return a lookup map.
+  // subscriptions.user_id → auth.users, profiles.user_id → auth.users.
+  // There is no direct FK between the two tables so PostgREST embedded
+  // resources don't work. We do a separate query and join in memory.
+  private async loadProfiles(userIds: string[]): Promise<Record<string, any>> {
+    if (!userIds.length) return {};
+    const { data } = await this.supabase
+      .getAdminClient()
+      .from('profiles')
+      .select('user_id, name, phone')
+      .in('user_id', userIds);
+    const map: Record<string, any> = {};
+    for (const p of data ?? []) map[p.user_id] = p;
+    return map;
+  }
+
   @Cron('0 7 * * *', { timeZone: 'Africa/Lagos' })
   async handleSubscriptionBilling() {
     this.logger.log('Running daily subscription billing cron');
     const now = new Date();
-    
-    // Find trials ending in 24hrs (between now and now + 24h)
+
+    // Trials ending in the next 24 h
     const tomorrow = new Date(now);
     tomorrow.setDate(tomorrow.getDate() + 1);
 
     const { data: endingSoon } = await this.supabase
       .getAdminClient()
       .from('subscriptions')
-      .select('*, profiles(phone, name, user_id)')
+      .select('*')
       .eq('status', 'trialing')
       .gt('trial_ends_at', now.toISOString())
       .lte('trial_ends_at', tomorrow.toISOString());
 
-    if (endingSoon) {
+    if (endingSoon?.length) {
+      const profileMap = await this.loadProfiles(endingSoon.map((s: any) => s.user_id));
       for (const sub of endingSoon) {
-        if (sub.profiles?.phone) {
-          const planAmounts = { basic: 1500, smart: 3000, pro: 5000 };
-          const amount = planAmounts[sub.plan as 'basic'|'smart'|'pro'] || 0;
+        const profile = profileMap[sub.user_id];
+        if (profile?.phone) {
+          const planAmounts: Record<string, number> = { basic: 1500, smart: 3000, pro: 5000 };
+          const amount = planAmounts[sub.plan] ?? 0;
           await this.sendWhatsApp(
-            sub.profiles.phone,
-            `Hi ${sub.profiles.name}, your AjoPot free trial ends tomorrow. Your ${sub.plan} plan will be activated and ₦${amount} charged to your saved card. Questions? Reply to this message.`
+            profile.phone,
+            `Hi ${profile.name}, your AjoPot free trial ends tomorrow. Your ${sub.plan} plan will be activated and ₦${amount} charged to your saved card. Questions? Reply to this message.`,
           );
-          
-          await this.supabase.getAdminClient().from('notifications').insert({
-            user_id: sub.user_id,
-            message: `Your free trial ends tomorrow. Your ${sub.plan} plan will be activated and ₦${amount} charged to your saved card.`
-          });
         }
+        await this.supabase.getAdminClient().from('notifications').insert({
+          user_id: sub.user_id,
+          message: `Your free trial ends tomorrow. Your ${sub.plan} plan will be activated soon.`,
+        });
       }
     }
-    
-    // Find trials expired today (trialing status, trial_ends_at <= now)
+
+    // Expired trials — attempt to charge
     const { data: expiredTrials } = await this.supabase
       .getAdminClient()
       .from('subscriptions')
-      .select('*, profiles(phone, name, user_id)')
+      .select('*')
       .eq('status', 'trialing')
       .lte('trial_ends_at', now.toISOString());
 
-    if (expiredTrials) {
+    if (expiredTrials?.length) {
+      const profileMap = await this.loadProfiles(expiredTrials.map((s: any) => s.user_id));
       for (const sub of expiredTrials) {
-        await this.chargeSubscription(sub);
+        await this.chargeSubscription(sub, profileMap[sub.user_id], false);
       }
     }
 
-    // Find payment_failed to retry (retry_count < 3)
+    // Retry payment_failed (retry_count < 3)
     const { data: failedRetries } = await this.supabase
       .getAdminClient()
       .from('subscriptions')
-      .select('*, profiles(phone, name, user_id)')
+      .select('*')
       .eq('status', 'payment_failed')
       .lt('retry_count', 3);
 
-    if (failedRetries) {
+    if (failedRetries?.length) {
+      const profileMap = await this.loadProfiles(failedRetries.map((s: any) => s.user_id));
       for (const sub of failedRetries) {
-        await this.chargeSubscription(sub, true);
+        await this.chargeSubscription(sub, profileMap[sub.user_id], true);
       }
     }
   }
 
-  private async chargeSubscription(sub: any, isRetry = false) {
+  private async chargeSubscription(sub: any, profile: any, isRetry: boolean) {
     try {
-      const email = `${(sub.profiles?.phone || sub.user_id).replace(/\D/g, '')}@ajopot.app`;
+      const email = profile?.phone
+        ? `${profile.phone.replace(/\D/g, '')}@ajopot.app`
+        : `${sub.user_id}@ajopot.app`;
       const authCode = sub.paystack_subscription_code;
-      
+
       if (!authCode) {
-        // No card vaulted -> mark payment failed
         await this.markPaymentFailed(sub.user_id, sub.retry_count, isRetry);
         return;
       }
 
-      const planAmounts = { basic: 150000, smart: 300000, pro: 500000 };
-      const amount = planAmounts[sub.plan as 'basic'|'smart'|'pro'] || 0;
+      const planAmounts: Record<string, number> = { basic: 150000, smart: 300000, pro: 500000 };
+      const amount = planAmounts[sub.plan] ?? 0;
 
       const paystackKey = this.config.get<string>('PAYSTACK_SECRET_KEY');
       const res = await fetch('https://api.paystack.co/transaction/charge_authorization', {
@@ -99,7 +119,7 @@ export class SubscriptionsCron {
           Authorization: `Bearer ${paystackKey}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ email, amount, authorization_code: authCode })
+        body: JSON.stringify({ email, amount, authorization_code: authCode }),
       });
 
       const json = await res.json() as any;
@@ -121,7 +141,7 @@ export class SubscriptionsCron {
       .update({ status: 'payment_failed', retry_count: newCount })
       .eq('user_id', userId);
 
-    if (newCount >= 3 || currentRetries === undefined) {
+    if (newCount >= 3) {
       await this.supabase
         .getAdminClient()
         .from('profiles')
@@ -131,13 +151,13 @@ export class SubscriptionsCron {
   }
 
   private async sendWhatsApp(phone: string, message: string): Promise<void> {
-    const apiUrl = this.config.get<string>('WHATSAPP_API_URL')
-    const token = this.config.get<string>('WHATSAPP_API_TOKEN')
-    const phoneId = this.config.get<string>('WHATSAPP_PHONE_ID')
+    const apiUrl = this.config.get<string>('WHATSAPP_API_URL');
+    const token = this.config.get<string>('WHATSAPP_API_TOKEN');
+    const phoneId = this.config.get<string>('WHATSAPP_PHONE_ID');
 
     if (!apiUrl || !token || !phoneId) {
-      this.logger.warn('WhatsApp API not configured, skipping message to ' + phone)
-      return
+      this.logger.warn('WhatsApp API not configured, skipping message to ' + phone);
+      return;
     }
 
     try {
@@ -149,10 +169,10 @@ export class SubscriptionsCron {
           to: phone.replace('+', ''),
           type: 'text',
           text: { body: message },
-        })
+        }),
       });
     } catch (err: any) {
-      this.logger.error(`Failed to send WhatsApp to ${phone}: ${err.message}`)
+      this.logger.error(`Failed to send WhatsApp to ${phone}: ${err.message}`);
     }
   }
 }

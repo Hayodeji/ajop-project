@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common'
 import { SupabaseService } from '../supabase/supabase.service'
 import { SubscriptionsService } from '../subscriptions/subscriptions.service'
+import { AuditService } from '../audit/audit.service'
 import { GroupsRepo } from '../groups/groups.repo'
 import { MembersRepo } from './members.repo'
 import { CreateMemberInput, UpdateMemberInput } from './members.dto'
@@ -21,6 +22,7 @@ export class MembersService {
     private readonly groupsRepo: GroupsRepo,
     private readonly subscriptions: SubscriptionsService,
     private readonly supabase: SupabaseService,
+    private readonly audit: AuditService,
   ) {}
 
   async getMembers(groupId: string, adminId: string): Promise<Member[]> {
@@ -93,6 +95,13 @@ export class MembersService {
       status: 'pending',
     })
 
+    void this.audit.log({
+      event_type: 'member.added',
+      actor_id: adminId,
+      target_id: member.id,
+      meta: { name: input.name, phone: input.phone, group_id: input.group_id, group_name: groupData.name, position: input.payout_position },
+    })
+
     // Send WhatsApp notification
     const adminName = (groupData as any).profiles?.name || 'Admin'
     const amountStr = (groupData.contribution_amount / 100).toLocaleString('en-NG')
@@ -149,10 +158,17 @@ export class MembersService {
 
     try {
       await this.membersRepo.softDelete(id)
-      return true
     } catch (error) {
       throw new NotFoundException('Could not remove member.')
     }
+
+    void this.audit.log({
+      event_type: 'member.removed',
+      actor_id: adminId,
+      target_id: id,
+      meta: { name: member.name, group_id: member.group_id },
+    })
+    return true
   }
 
   private async validateGroupOwnership(groupId: string, adminId: string) {

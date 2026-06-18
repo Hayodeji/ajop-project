@@ -8,6 +8,7 @@ export const useContributions = (groupId: string, from?: string, to?: string) =>
     queryKey: ['contributions', groupId, from, to],
     queryFn: () => getContributions(groupId, from, to),
     enabled: !!groupId,
+    refetchInterval: 30_000,
   })
 
 export const useMarkContribution = (groupId: string) => {

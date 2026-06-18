@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common'
 import { randomBytes } from 'crypto'
 import { SubscriptionsService } from '../subscriptions/subscriptions.service'
+import { AuditService } from '../audit/audit.service'
 import { GroupsRepo } from './groups.repo'
 import { CreateGroupInput, UpdateGroupInput } from './groups.dto'
 import { Group } from './groups.schema'
@@ -18,6 +19,7 @@ export class GroupsService {
   constructor(
     private readonly groupsRepo: GroupsRepo,
     private readonly subscriptions: SubscriptionsService,
+    private readonly audit: AuditService,
   ) {}
 
   async create(adminId: string, input: CreateGroupInput): Promise<Group> {
@@ -34,8 +36,9 @@ export class GroupsService {
 
     const publicToken = randomBytes(16).toString('base64url')
 
+    let group: Group
     try {
-      return await this.groupsRepo.create(adminId, {
+      group = await this.groupsRepo.create(adminId, {
         ...input,
         public_token: publicToken,
       })
@@ -43,6 +46,15 @@ export class GroupsService {
       this.logger.error(`Create group failed: ${error.message}`)
       throw new InternalServerErrorException('Could not create the group.')
     }
+
+    void this.audit.log({
+      event_type: 'group.created',
+      actor_id: adminId,
+      target_id: group.id,
+      meta: { name: group.name, member_count: group.member_count, frequency: group.frequency },
+    })
+
+    return group
   }
 
   async findAllForAdmin(adminId: string): Promise<Group[]> {
@@ -102,10 +114,12 @@ export class GroupsService {
 
     try {
       await this.groupsRepo.delete(adminId, id)
-      return true
     } catch (error) {
       this.logger.error(`Delete group failed: ${error.message}`)
       throw new InternalServerErrorException('Could not delete the group.')
     }
+
+    void this.audit.log({ event_type: 'group.deleted', actor_id: adminId, target_id: id })
+    return true
   }
 }
