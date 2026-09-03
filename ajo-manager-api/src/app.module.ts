@@ -5,7 +5,7 @@ import { GraphQLModule } from '@nestjs/graphql'
 import { ApolloDriver, ApolloDriverConfig } from '@nestjs/apollo'
 import { join } from 'path'
 import { validateEnv } from './config/env.validation'
-import { SupabaseModule } from './supabase/supabase.module'
+import { DatabaseModule } from './database/database.module'
 import { AuthModule } from './auth/auth.module'
 import { GroupsModule } from './groups/groups.module'
 import { SubscriptionsModule } from './subscriptions/subscriptions.module'
@@ -34,7 +34,7 @@ import { AppController } from './app.controller'
       context: ({ req }: { req: any }) => ({ req }),
       path: '/api/graphql', // Mounting it under /api/graphql for consistency
     }),
-    SupabaseModule,
+    DatabaseModule,
     AuditModule,
     AuthModule,
     GroupsModule,

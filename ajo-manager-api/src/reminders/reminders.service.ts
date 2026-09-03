@@ -1,8 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common'
 import { Cron } from '@nestjs/schedule'
-import { ConfigService } from '@nestjs/config'
-import axios from 'axios'
 import { RemindersRepo } from './reminders.repo'
+import { WhatsAppService } from '../whatsapp/whatsapp.service'
 
 @Injectable()
 export class RemindersService {
@@ -10,7 +9,7 @@ export class RemindersService {
 
   constructor(
     private readonly remindersRepo: RemindersRepo,
-    private readonly config: ConfigService,
+    private readonly whatsApp: WhatsAppService,
   ) {}
 
   /** Runs every morning at 7AM. Sends reminders 2 days before and 2 days after due date. */
@@ -36,8 +35,14 @@ export class RemindersService {
       const group = contrib.groups as any
       if (!member?.phone) continue
 
+      const hasRecent = await this.whatsApp.hasRecentReminder(member.phone)
+      if (hasRecent) {
+        this.logger.log(`Skipping reminder for ${member.phone} (already reminded in last 24h)`)
+        continue
+      }
+
       const message = `Hi ${member.name} 👋, just a reminder that your contribution for *${group.name}* (Cycle ${contrib.cycle_number}) is due in *2 days*. Please make payment on time to avoid late charges. — AjoPot`
-      await this.sendWhatsApp(member.phone, message)
+      await this.whatsApp.sendMessage(member.phone, message, member.id, 'payment_reminder')
     }
   }
 
@@ -51,8 +56,14 @@ export class RemindersService {
       const group = contrib.groups as any
       if (!member?.phone) continue
 
+      const hasRecent = await this.whatsApp.hasRecentReminder(member.phone)
+      if (hasRecent) {
+        this.logger.log(`Skipping overdue reminder for ${member.phone} (already reminded in last 24h)`)
+        continue
+      }
+
       const message = `Hi ${member.name}, your contribution for *${group.name}* (Cycle ${contrib.cycle_number}) was due 2 days ago and is still unpaid. Please make payment as soon as possible to avoid late fees. — AjoPot`
-      await this.sendWhatsApp(member.phone, message)
+      await this.whatsApp.sendMessage(member.phone, message, member.id, 'overdue_reminder')
     }
   }
 
@@ -63,41 +74,36 @@ export class RemindersService {
 
     if (!pendingMembers?.length) {
       this.logger.log(`No pending members in group ${group.id}`)
-      return
+      return {
+        sent: 0,
+        noPhone: 0,
+        totalPending: 0,
+      }
     }
+
+    let sent = 0
+    let noPhone = 0
 
     for (const contrib of pendingMembers) {
       const member = contrib.group_members as any
-      if (!member?.phone) continue
+      if (!member?.phone) {
+        noPhone++
+        continue
+      }
 
       const message = `Hi ${member.name} 👋, this is a reminder from your Ajo admin to contribute to *${group.name}* (Cycle ${group.current_cycle}). Please make payment as soon as possible. — AjoPot`
-      await this.sendWhatsApp(member.phone, message)
-    }
-  }
-
-  async sendWhatsApp(phone: string, message: string): Promise<void> {
-    const apiUrl = this.config.get<string>('WHATSAPP_API_URL')
-    const token = this.config.get<string>('WHATSAPP_API_TOKEN')
-    const phoneId = this.config.get<string>('WHATSAPP_PHONE_ID')
-
-    if (!apiUrl || !token || !phoneId) {
-      this.logger.warn('WhatsApp API not configured, skipping message to ' + phone)
-      return
+      const success = await this.whatsApp.sendMessage(member.phone, message, member.id, 'manual_reminder')
+      if (success) sent++
     }
 
-    try {
-      await axios.post(
-        `${apiUrl}/${phoneId}/messages`,
-        {
-          messaging_product: 'whatsapp',
-          to: phone.replace('+', ''),
-          type: 'text',
-          text: { body: message },
-        },
-        { headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } },
-      )
-    } catch (err: any) {
-      this.logger.error(`Failed to send WhatsApp to ${phone}: ${err.message}`)
+    this.logger.log(
+      `Manual reminders sent: ${sent}/${pendingMembers.length} (${noPhone} without phone)`,
+    )
+
+    return {
+      sent,
+      noPhone,
+      totalPending: pendingMembers.length,
     }
   }
 }

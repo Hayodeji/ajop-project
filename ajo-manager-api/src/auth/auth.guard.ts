@@ -1,18 +1,12 @@
-import {
-  CanActivate,
-  ExecutionContext,
-  Injectable,
-  Logger,
-  UnauthorizedException,
-} from '@nestjs/common'
-import { SupabaseService } from '../supabase/supabase.service'
+import { CanActivate, ExecutionContext, Injectable, Logger, UnauthorizedException } from '@nestjs/common'
+import { JwtService } from './services/jwt.service'
 import type { AuthenticatedRequest } from './types'
 
 @Injectable()
-export class SupabaseAuthGuard implements CanActivate {
-  private readonly logger = new Logger(SupabaseAuthGuard.name)
+export class JwtAuthGuard implements CanActivate {
+  private readonly logger = new Logger(JwtAuthGuard.name)
 
-  constructor(private readonly supabase: SupabaseService) {}
+  constructor(private readonly jwtService: JwtService) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = this.getRequest(context)
@@ -24,12 +18,13 @@ export class SupabaseAuthGuard implements CanActivate {
       throw new UnauthorizedException('You must sign in to do that.')
     }
 
-    const user = await this.supabase.getUserFromToken(token)
-    if (!user) {
+    const payload = this.jwtService.verifyAccessToken(token)
+    if (!payload) {
       throw new UnauthorizedException('Your session has expired. Please sign in again.')
     }
 
-    request.user = user
+    // Normalize to shape expected elsewhere (many places expect `user.id`)
+    request.user = { id: (payload as any).userId ?? (payload as any).id, ...(payload as any) }
     return true
   }
 

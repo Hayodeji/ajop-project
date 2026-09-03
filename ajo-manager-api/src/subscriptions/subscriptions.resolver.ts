@@ -1,6 +1,5 @@
 import { Resolver, Query, Mutation, Args, ResolveField, Parent } from '@nestjs/graphql'
 import { UseGuards } from '@nestjs/common'
-import type { User } from '@supabase/supabase-js'
 import { GqlAuthGuard } from '../auth/gql-auth.guard'
 import { CurrentUser } from '../auth/current-user.decorator'
 import { SubscriptionsService } from './subscriptions.service'
@@ -13,13 +12,13 @@ export class SubscriptionsResolver {
   constructor(private readonly subscriptionsService: SubscriptionsService) {}
 
   @Query(() => Subscription, { nullable: true })
-  mySubscription(@CurrentUser() user: User) {
+  mySubscription(@CurrentUser() user: any) {
     return this.subscriptionsService.getMySubscription(user.id)
   }
 
   @Mutation(() => Subscription)
   selectPlan(
-    @CurrentUser() user: User,
+    @CurrentUser() user: any,
     @Args('input') input: SelectPlanInput,
   ) {
     return this.subscriptionsService.selectPlan(user.id, input.plan as any)
@@ -27,7 +26,7 @@ export class SubscriptionsResolver {
 
   @Mutation(() => PaymentInitiationResponse)
   initiatePayment(
-    @CurrentUser() user: User,
+    @CurrentUser() user: any,
     @Args('input') input: InitiatePaymentInput,
   ) {
     const email = user.email || `${user.id}@ajopot.local`
@@ -36,7 +35,7 @@ export class SubscriptionsResolver {
 
   @Mutation(() => Subscription)
   verifyPayment(
-    @CurrentUser() user: User,
+    @CurrentUser() user: any,
     @Args('input') input: VerifyPaymentInput,
   ) {
     return this.subscriptionsService.verifyAndActivate(user.id, input.reference)

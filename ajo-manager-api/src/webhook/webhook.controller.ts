@@ -1,18 +1,25 @@
-import { Body, Controller, Get, Headers, Post, Query, Req } from '@nestjs/common'
+import { Body, Controller, Get, Headers, Post, Query, Req, Logger } from '@nestjs/common'
 import * as crypto from 'crypto'
 import type { Request } from 'express'
 import { WhatsappWebhookDto } from './dto/whatsapp-webhook.dto'
-import { SupabaseService } from '../supabase/supabase.service'
 import { ConfigService } from '@nestjs/config'
 import { SubscriptionsService } from '../subscriptions/subscriptions.service'
-import { SubscriptionPlan } from '../subscriptions/subscriptions.schema'
+import { SubscriptionPlan, SubscriptionStatus } from '../subscriptions/subscriptions.schema'
+import { InjectRepository } from '@nestjs/typeorm'
+import { Repository } from 'typeorm'
+import { PaymentEventEntity } from '../database/entities/payment-event.entity'
+import { SubscriptionsRepo } from '../subscriptions/subscriptions.repo'
 
 @Controller('webhook')
 export class WebhookController {
+  private readonly logger = new Logger(WebhookController.name)
+
   constructor(
-    private readonly supabase: SupabaseService,
+    @InjectRepository(PaymentEventEntity)
+    private readonly paymentEventsRepo: Repository<PaymentEventEntity>,
     private readonly config: ConfigService,
     private readonly subscriptions: SubscriptionsService,
+    private readonly subscriptionsRepo: SubscriptionsRepo,
   ) {}
 
   // WhatsApp webhook verification
@@ -35,7 +42,8 @@ export class WebhookController {
         if (msg.type === 'text') {
           const text: string = msg.text?.body?.toLowerCase() ?? ''
           if (text.includes('paid') || text.includes('done') || text.includes('sent')) {
-            await this.supabase.getAdminClient().from('contributions').select('id').limit(1)
+            // no-op placeholder: contributions check removed during supabase removal
+            this.logger.debug('WhatsApp message looks like a payment — no DB action')
           }
         }
       }
@@ -58,12 +66,14 @@ export class WebhookController {
         if (hash !== signature) return { status: 'invalid signature' }
       }
 
-      await this.supabase.getAdminClient().from('payment_events').insert({
-        event_type: body?.event ?? 'unknown',
-        paystack_reference: body?.data?.reference,
-        user_id: body?.data?.metadata?.user_id,
+      // persist payment event via TypeORM
+      const ev = this.paymentEventsRepo.create({
+        eventType: body?.event ?? 'unknown',
+        paystackReference: body?.data?.reference,
+        userId: body?.data?.metadata?.user_id,
         payload: body,
       })
+      await this.paymentEventsRepo.save(ev)
 
       const event = body?.event
       const data = body?.data
@@ -80,39 +90,20 @@ export class WebhookController {
         }
       } else if (event === 'charge.failed' || event === 'invoice.payment_failed') {
         if (user_id) {
-          const { data: sub } = await this.supabase
-            .getAdminClient()
-            .from('subscriptions')
-            .select('retry_count')
-            .eq('user_id', user_id)
-            .single()
-
-          const retries = (sub?.retry_count ?? 0) + 1
-          await this.supabase
-            .getAdminClient()
-            .from('subscriptions')
-            .update({ status: 'payment_failed', retry_count: retries })
-            .eq('user_id', user_id)
+          const sub = await this.subscriptionsRepo.findByUserId(user_id)
+          const retries = (sub?.retryCount ?? 0) + 1
+          await this.subscriptionsRepo.update(user_id, { status: SubscriptionStatus.PAYMENT_FAILED, retryCount: retries })
         }
       } else if (event === 'subscription.disable') {
         // Find by customer code or email if user_id is missing
         let targetUser = user_id
         if (!targetUser && data?.customer?.customer_code) {
-           const { data: c } = await this.supabase
-             .getAdminClient()
-             .from('subscriptions')
-             .select('user_id')
-             .eq('paystack_customer_code', data.customer.customer_code)
-             .maybeSingle()
-           if (c) targetUser = c.user_id
+          const found = await this.subscriptionsRepo.findByUserId(data.customer.customer_code)
+          if (found) targetUser = (found as any).userId || (found as any).user_id
         }
-        
+
         if (targetUser) {
-          await this.supabase
-            .getAdminClient()
-            .from('subscriptions')
-            .update({ status: 'cancelled' })
-            .eq('user_id', targetUser)
+          await this.subscriptionsRepo.update(targetUser, { status: 'cancelled' })
         }
       }
     } catch (err) {

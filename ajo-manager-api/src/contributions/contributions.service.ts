@@ -6,6 +6,7 @@ import { MembersRepo } from '../members/members.repo'
 import { ContributionsRepo } from './contributions.repo'
 import { CreateContributionInput } from './contributions.dto'
 import { Contribution, ContributionStatus } from './contributions.schema'
+import { WhatsAppService } from '../whatsapp/whatsapp.service'
 
 @Injectable()
 export class ContributionsService {
@@ -17,6 +18,7 @@ export class ContributionsService {
     private readonly membersRepo: MembersRepo,
     private readonly subscriptions: SubscriptionsService,
     private readonly audit: AuditService,
+    private readonly whatsApp: WhatsAppService,
   ) {}
 
   async getContributions(
@@ -87,6 +89,13 @@ export class ContributionsService {
           amount: group.contribution_amount,
         },
       })
+
+      // Send payment confirmation message if marked as PAID
+      if (input.status === ContributionStatus.PAID && member?.phone) {
+        const amountStr = (group.contribution_amount / 100).toLocaleString('en-NG')
+        const message = `Hi ${member.name} 👋, thanks for paying ₦${amountStr} for *${group.name}* (Cycle ${input.cycle_number}). Your payment has been confirmed. — AjoPot`
+        await this.whatsApp.sendMessage(member.phone, message, member.id, 'payment_confirmation')
+      }
     }
 
     // Late penalty tracking

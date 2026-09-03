@@ -1,98 +1,103 @@
 import { Injectable } from '@nestjs/common'
-import { SupabaseService } from '../supabase/supabase.service'
+import { InjectRepository } from '@nestjs/typeorm'
+import { Repository } from 'typeorm'
+import { GroupEntity } from '../database/entities/group.entity'
+import { GroupMemberEntity } from '../database/entities/group-member.entity'
 import { Group } from './groups.schema'
 import { CreateGroupInput, UpdateGroupInput } from './groups.dto'
 
 @Injectable()
 export class GroupsRepo {
-  constructor(private readonly supabase: SupabaseService) {}
+  constructor(
+    @InjectRepository(GroupEntity)
+    private readonly groupsRepository: Repository<GroupEntity>,
+    @InjectRepository(GroupMemberEntity)
+    private readonly groupMembersRepository: Repository<GroupMemberEntity>,
+  ) {}
 
-  async create(adminId: string, input: any): Promise<Group> {
-    const { data, error } = await this.supabase
-      .getAdminClient()
-      .from('groups')
-      .insert({
-        admin_id: adminId,
-        ...input,
-      })
-      .select()
-      .single()
+  private mapGroup(group: GroupEntity): Group {
+    return {
+      id: group.id,
+      admin_id: group.adminId,
+      name: group.name,
+      contribution_amount: Number(group.contributionAmount),
+      late_fee_amount: Number(group.lateFeeAmount ?? 0),
+      frequency: group.frequency,
+      member_count: group.memberCount,
+      current_cycle: group.currentCycle,
+      public_token: group.publicToken,
+      created_at: group.createdAt,
+    }
+  }
 
-    if (error) throw error
-    return data
+  private mapMember(member: GroupMemberEntity) {
+    return {
+      name: member.name,
+      payout_position: member.payoutPosition,
+    }
+  }
+
+  async create(adminId: string, input: CreateGroupInput, publicToken: string): Promise<Group> {
+    const group = this.groupsRepository.create({
+      adminId,
+      name: input.name,
+      contributionAmount: input.contribution_amount,
+      frequency: input.frequency,
+      memberCount: input.member_count,
+      publicToken,
+    })
+
+    const saved = await this.groupsRepository.save(group)
+    return this.mapGroup(saved)
   }
 
   async countByAdminId(adminId: string): Promise<number> {
-    const { count, error } = await this.supabase
-      .getAdminClient()
-      .from('groups')
-      .select('id', { count: 'exact', head: true })
-      .eq('admin_id', adminId)
-
-    if (error) throw error
-    return count ?? 0
+    return await this.groupsRepository.count({ where: { adminId } })
   }
 
   async findAll(adminId: string): Promise<Group[]> {
-    const { data, error } = await this.supabase
-      .getAdminClient()
-      .from('groups')
-      .select('*')
-      .eq('admin_id', adminId)
-      .order('created_at', { ascending: false })
-
-    if (error) throw error
-    return data || []
+    const groups = await this.groupsRepository.find({
+      where: { adminId },
+      order: { createdAt: 'DESC' },
+    })
+    return groups.map((group) => this.mapGroup(group))
   }
 
   async findById(adminId: string, id: string): Promise<Group | null> {
-    const { data, error } = await this.supabase
-      .getAdminClient()
-      .from('groups')
-      .select('*')
-      .eq('id', id)
-      .eq('admin_id', adminId)
-      .maybeSingle()
-
-    if (error) throw error
-    return data
+    const group = await this.groupsRepository.findOne({
+      where: { id, adminId },
+    })
+    return group ? this.mapGroup(group) : null
   }
 
   async update(adminId: string, id: string, input: UpdateGroupInput): Promise<Group> {
-    const { data, error } = await this.supabase
-      .getAdminClient()
-      .from('groups')
-      .update(input)
-      .eq('id', id)
-      .eq('admin_id', adminId)
-      .select()
-      .single()
+    const group = await this.groupsRepository.findOne({
+      where: { id, adminId },
+    })
+    if (!group) {
+      throw new Error('Group not found')
+    }
 
-    if (error) throw error
-    return data
+    Object.assign(group, {
+      name: input.name ?? group.name,
+      contributionAmount: input.contribution_amount ?? group.contributionAmount,
+      frequency: input.frequency ?? group.frequency,
+      memberCount: input.member_count ?? group.memberCount,
+    })
+
+    const updated = await this.groupsRepository.save(group)
+    return this.mapGroup(updated)
   }
 
   async delete(adminId: string, id: string): Promise<void> {
-    const { error } = await this.supabase
-      .getAdminClient()
-      .from('groups')
-      .delete()
-      .eq('id', id)
-      .eq('admin_id', adminId)
-
-    if (error) throw error
+    await this.groupsRepository.delete({ id, adminId })
   }
 
   async getActiveMembers(groupId: string) {
-    const { data, error } = await this.supabase
-      .getAdminClient()
-      .from('group_members')
-      .select('name, payout_position')
-      .eq('group_id', groupId)
-      .eq('is_active', true)
-      .order('payout_position')
-
-    if (error) throw error
-    return data || []
+    const members = await this.groupMembersRepository.find({
+      where: { groupId, isActive: true },
+      order: { payoutPosition: 'ASC' },
+    })
+    return members.map((member) => this.mapMember(member))
   }
 }

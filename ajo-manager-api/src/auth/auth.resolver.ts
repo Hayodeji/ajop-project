@@ -1,6 +1,5 @@
 import { Resolver, Query, Mutation, Args } from '@nestjs/graphql'
 import { UseGuards } from '@nestjs/common'
-import type { User } from '@supabase/supabase-js'
 import { GqlAuthGuard } from './gql-auth.guard'
 import { CurrentUser } from './current-user.decorator'
 import { AuthService } from './auth.service'
@@ -12,7 +11,7 @@ export class AuthResolver {
   constructor(private readonly authService: AuthService) {}
 
   @Mutation(() => AuthResponse)
-  checkPhone(@Args('input') input: CheckPhoneInput) {
+  async checkPhone(@Args('input') input: CheckPhoneInput) {
     return this.authService.checkPhone(input.phone).then(res => ({
       success: true,
       message: res.isNewUser ? 'New user' : 'Existing user'
@@ -22,7 +21,7 @@ export class AuthResolver {
   @Mutation(() => Profile)
   @UseGuards(GqlAuthGuard)
   completeProfile(
-    @CurrentUser() user: User,
+    @CurrentUser() user: any,
     @Args('input') input: CompleteProfileInput,
   ) {
     const authPhone = (user.phone ?? '').replace(/\s/g, '') || undefined
@@ -31,7 +30,7 @@ export class AuthResolver {
 
   @Query(() => Profile)
   @UseGuards(GqlAuthGuard)
-  profile(@CurrentUser() user: User) {
+  profile(@CurrentUser() user: any) {
     return this.authService.getProfile(user.id)
   }
 
@@ -42,8 +41,8 @@ export class AuthResolver {
 
   @Mutation(() => AuthResponse)
   @UseGuards(GqlAuthGuard)
-  resetPassword(
-    @CurrentUser() user: User,
+  async resetPassword(
+    @CurrentUser() user: any,
     @Args('input') input: ResetPasswordInput,
   ) {
     return this.authService.resetPassword(user.id, input.password).then(() => ({

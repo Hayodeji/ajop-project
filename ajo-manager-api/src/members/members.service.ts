@@ -5,13 +5,14 @@ import {
   ConflictException,
   Logger,
 } from '@nestjs/common'
-import { SupabaseService } from '../supabase/supabase.service'
+import { ContributionsRepo } from '../contributions/contributions.repo'
 import { SubscriptionsService } from '../subscriptions/subscriptions.service'
 import { AuditService } from '../audit/audit.service'
 import { GroupsRepo } from '../groups/groups.repo'
 import { MembersRepo } from './members.repo'
 import { CreateMemberInput, UpdateMemberInput } from './members.dto'
 import { Member } from './members.schema'
+import { WhatsAppService } from '../whatsapp/whatsapp.service'
 
 @Injectable()
 export class MembersService {
@@ -21,8 +22,9 @@ export class MembersService {
     private readonly membersRepo: MembersRepo,
     private readonly groupsRepo: GroupsRepo,
     private readonly subscriptions: SubscriptionsService,
-    private readonly supabase: SupabaseService,
+    private readonly contributionsRepo: ContributionsRepo,
     private readonly audit: AuditService,
+    private readonly whatsApp: WhatsAppService,
   ) {}
 
   async getMembers(groupId: string, adminId: string): Promise<Member[]> {
@@ -87,8 +89,7 @@ export class MembersService {
     else if (groupData.frequency === 'monthly') dueDate.setMonth(dueDate.getMonth() + 1)
 
     // Auto-generate contribution row for current cycle
-    // Note: Moving this to repo eventually if needed, but for now using Supabase service
-    await this.supabase.getAdminClient().from('contributions').insert({
+    await this.contributionsRepo.create({
       group_id: input.group_id,
       member_id: member.id,
       cycle_number: groupData.current_cycle,
@@ -106,32 +107,9 @@ export class MembersService {
     const adminName = (groupData as any).profiles?.name || 'Admin'
     const amountStr = (groupData.contribution_amount / 100).toLocaleString('en-NG')
     const message = `Hi ${input.name}, you've been added to the '${groupData.name}' ajo group by ${adminName} on AjoPot.\nYour contribution: ₦${amountStr} ${groupData.frequency}.\nYour collection position: #${input.payout_position}.`
-    await this.sendWhatsApp(input.phone, message)
+    await this.whatsApp.sendMessage(input.phone, message, member.id, 'member_onboarding')
 
     return member
-  }
-
-  private async sendWhatsApp(phone: string, message: string) {
-    const apiUrl = process.env.WHATSAPP_API_URL
-    const token = process.env.WHATSAPP_API_TOKEN
-    const phoneId = process.env.WHATSAPP_PHONE_ID
-
-    if (!apiUrl || !token || !phoneId) return
-
-    try {
-      await fetch(`${apiUrl}/${phoneId}/messages`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          messaging_product: 'whatsapp',
-          to: phone.replace('+', ''),
-          type: 'text',
-          text: { body: message },
-        })
-      })
-    } catch {
-      // ignore
-    }
   }
 
   async updateMember(

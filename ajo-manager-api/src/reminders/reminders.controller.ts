@@ -1,5 +1,5 @@
 import { Controller, Post, Param, UseGuards, ForbiddenException } from '@nestjs/common'
-import { SupabaseAuthGuard } from '../auth/auth.guard'
+import { JwtAuthGuard } from '../auth/auth.guard'
 import { CurrentUser } from '../auth/current-user.decorator'
 import { RemindersService } from './reminders.service'
 import { GroupsRepo } from '../groups/groups.repo'
@@ -12,7 +12,7 @@ export class RemindersController {
   ) {}
 
   @Post('group/:groupId')
-  @UseGuards(SupabaseAuthGuard)
+  @UseGuards(JwtAuthGuard)
   async sendGroupReminders(
     @Param('groupId') groupId: string,
     @CurrentUser() user: any,
@@ -20,7 +20,10 @@ export class RemindersController {
     const group = await this.groupsRepo.findById(user.id, groupId)
     if (!group) throw new ForbiddenException('Group not found or access denied')
 
-    await this.remindersService.triggerManualGroupReminders(group)
-    return { success: true }
+    const result = await this.remindersService.triggerManualGroupReminders(group)
+    return { 
+      success: true,
+      ...result,
+    }
   }
 }

@@ -1,6 +1,5 @@
 import { Resolver, Query, Mutation, Args, ID, ResolveField, Parent } from '@nestjs/graphql'
 import { UseGuards } from '@nestjs/common'
-import type { User } from '@supabase/supabase-js'
 import { GqlAuthGuard } from '../auth/gql-auth.guard'
 import { CurrentUser } from '../auth/current-user.decorator'
 import { ContributionsService } from './contributions.service'
@@ -14,7 +13,7 @@ export class ContributionsResolver {
 
   @Query(() => [Contribution])
   contributions(
-    @CurrentUser() user: User,
+    @CurrentUser() user: any,
     @Args('groupId', { type: () => ID }) groupId: string,
     @Args('fromDate', { nullable: true }) fromDate?: string,
     @Args('toDate', { nullable: true }) toDate?: string,
@@ -24,7 +23,7 @@ export class ContributionsResolver {
 
   @Mutation(() => Contribution)
   markContribution(
-    @CurrentUser() user: User,
+    @CurrentUser() user: any,
     @Args('input') input: CreateContributionInput,
   ) {
     return this.contributionsService.markContribution(user.id, input)

@@ -1,91 +1,81 @@
 import { Injectable } from '@nestjs/common'
-import { SupabaseService } from '../supabase/supabase.service'
-import { Contribution } from './contributions.schema'
-import { CreateContributionInput, UpdateContributionInput } from './contributions.dto'
+import { InjectRepository } from '@nestjs/typeorm'
+import { Repository } from 'typeorm'
+import { ContributionEntity, ContributionStatus } from '../database/entities/contribution.entity'
+import { GroupMemberEntity } from '../database/entities/group-member.entity'
 
 @Injectable()
 export class ContributionsRepo {
-  constructor(private readonly supabase: SupabaseService) {}
+  constructor(
+    @InjectRepository(ContributionEntity)
+    private readonly contributionsRepo: Repository<ContributionEntity>,
+    @InjectRepository(GroupMemberEntity)
+    private readonly membersRepo: Repository<GroupMemberEntity>,
+  ) {}
 
-  async findExisting(groupId: string, memberId: string, cycleNumber: number): Promise<Contribution | null> {
-    const { data, error } = await this.supabase
-      .getAdminClient()
-      .from('contributions')
-      .select('*')
-      .eq('group_id', groupId)
-      .eq('member_id', memberId)
-      .eq('cycle_number', cycleNumber)
-      .maybeSingle()
-
-    if (error) throw error
-    return data
+  async findExisting(groupId: string, memberId: string, cycleNumber: number): Promise<any | null> {
+    return this.contributionsRepo.findOne({ where: { groupId, memberId, cycleNumber } })
   }
 
-  async create(input: any): Promise<Contribution> {
-    const { data, error } = await this.supabase
-      .getAdminClient()
-      .from('contributions')
-      .insert(input)
-      .select()
-      .single()
-
-    if (error) throw error
-    return data
+  async create(input: any): Promise<any> {
+    const entity = this.contributionsRepo.create({
+      groupId: input.group_id || input.groupId,
+      memberId: input.member_id || input.memberId,
+      cycleNumber: input.cycle_number || input.cycleNumber,
+      status: input.status,
+      paidAt: input.paid_at || input.paidAt,
+      dueDate: input.due_date || input.dueDate,
+      markedBy: input.marked_by || input.markedBy,
+    })
+    return this.contributionsRepo.save(entity)
   }
 
-  async update(id: string, input: any): Promise<Contribution> {
-    const { data, error } = await this.supabase
-      .getAdminClient()
-      .from('contributions')
-      .update(input)
-      .eq('id', id)
-      .select()
-      .single()
-
-    if (error) throw error
-    return data
+  async update(id: string, input: any): Promise<any> {
+    await this.contributionsRepo.update(id, {
+      cycleNumber: input.cycle_number ?? input.cycleNumber,
+      status: input.status,
+      paidAt: input.paid_at ?? input.paidAt,
+      dueDate: input.due_date ?? input.dueDate,
+      markedBy: input.marked_by ?? input.markedBy,
+    })
+    return this.contributionsRepo.findOne({ where: { id } })
   }
 
-  async findAllByGroup(groupId: string, cycleNumber?: number, fromDate?: string, toDate?: string): Promise<Contribution[]> {
-    let query = this.supabase
-      .getAdminClient()
-      .from('contributions')
-      .select('*, group_members(name, phone, payout_position)')
-      .eq('group_id', groupId)
-      .order('cycle_number', { ascending: false })
-      .order('id', { ascending: false })
+  async findAllByGroup(groupId: string, cycleNumber?: number, fromDate?: string, toDate?: string): Promise<any[]> {
+    const qb = this.contributionsRepo.createQueryBuilder('c')
+      .leftJoinAndSelect('c.member', 'm')
+      .where('c.groupId = :groupId', { groupId })
+      .orderBy('c.cycleNumber', 'DESC')
+      .addOrderBy('c.id', 'DESC')
 
-    if (cycleNumber) {
-      query = query.eq('cycle_number', cycleNumber)
-    }
-    if (fromDate && toDate) {
-      query = query.gte('paid_at', fromDate).lte('paid_at', toDate)
-    }
+    if (cycleNumber) qb.andWhere('c.cycleNumber = :cycleNumber', { cycleNumber })
+    if (fromDate && toDate) qb.andWhere('c.paidAt >= :fromDate AND c.paidAt <= :toDate', { fromDate, toDate })
 
-    const { data, error } = await query
-    if (error) throw error
-    return data || []
+    const rows = await qb.getMany()
+    return rows.map(c => ({
+      id: c.id,
+      group_id: c.groupId,
+      member_id: c.memberId,
+      cycle_number: c.cycleNumber,
+      status: c.status,
+      paid_at: c.paidAt,
+      group_members: c.member ? { name: c.member.name, phone: c.member.phone, payout_position: c.member.payoutPosition } : null,
+    }))
   }
 
   async countPaidInCycle(groupId: string, cycleNumber: number): Promise<number> {
-    const { count, error } = await this.supabase
-      .getAdminClient()
-      .from('contributions')
-      .select('id', { count: 'exact', head: true })
-      .eq('group_id', groupId)
-      .eq('cycle_number', cycleNumber)
-      .eq('status', 'paid')
-
-    if (error) throw error
-    return count ?? 0
+    return this.contributionsRepo.count({ where: { groupId, cycleNumber, status: ContributionStatus.PAID } })
   }
 
   async bulkInsert(inserts: any[]): Promise<void> {
-    const { error } = await this.supabase
-      .getAdminClient()
-      .from('contributions')
-      .insert(inserts)
-
-    if (error) throw error
+    const entities = inserts.map(i => this.contributionsRepo.create({
+      groupId: i.group_id || i.groupId,
+      memberId: i.member_id || i.memberId,
+      cycleNumber: i.cycle_number || i.cycleNumber,
+      status: i.status,
+      paidAt: i.paid_at || i.paidAt,
+      dueDate: i.due_date || i.dueDate,
+    }))
+    await this.contributionsRepo.save(entities)
   }
 }
