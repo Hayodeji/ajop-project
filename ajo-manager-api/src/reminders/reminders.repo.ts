@@ -1,78 +1,101 @@
 import { Injectable } from '@nestjs/common'
-import { SupabaseService } from '../supabase/supabase.service'
+import { InjectRepository } from '@nestjs/typeorm'
+import { Repository, DataSource } from 'typeorm'
+import { ContributionEntity, ContributionStatus } from '../database/entities/contribution.entity'
+import { GroupEntity } from '../database/entities/group.entity'
+import { GroupMemberEntity } from '../database/entities/group-member.entity'
+import { SubscriptionEntity } from '../database/entities/subscription.entity'
 
 @Injectable()
 export class RemindersRepo {
-  constructor(private readonly supabase: SupabaseService) {}
+  constructor(
+    @InjectRepository(ContributionEntity)
+    private readonly contributionsRepo: Repository<ContributionEntity>,
+    @InjectRepository(GroupEntity)
+    private readonly groupsRepo: Repository<GroupEntity>,
+    @InjectRepository(GroupMemberEntity)
+    private readonly membersRepo: Repository<GroupMemberEntity>,
+    private readonly dataSource: DataSource,
+  ) {}
 
   async getGroupsForReminders() {
-    const { data, error } = await this.supabase
-      .getAdminClient()
-      .from('groups')
-      .select('id, name, current_cycle, frequency, admin_id, subscriptions!inner(plan, status)')
-      .in('subscriptions.plan', ['smart', 'pro'])
-      .in('subscriptions.status', ['trialing', 'active'])
+    const qb = this.groupsRepo.createQueryBuilder('g')
+      .innerJoin(SubscriptionEntity, 's', 's.userId = g.adminId')
+      .where('s.plan IN (:...plans)', { plans: ['smart', 'pro'] })
+      .andWhere('s.status IN (:...status)', { status: ['trialing', 'active'] })
+      .select(['g.id', 'g.name', 'g.currentCycle', 'g.frequency', 'g.adminId'])
 
-    if (error) throw error
-    return data || []
+    const rows = await qb.getRawMany()
+    return rows.map(r => ({ id: r.g_id, name: r.g_name, current_cycle: r.g_currentCycle, frequency: r.g_frequency, admin_id: r.g_adminId }))
   }
 
   async getContributionsDueIn(days: number) {
     const target = new Date()
     target.setDate(target.getDate() + days)
-    const dateStr = target.toISOString().split('T')[0] // YYYY-MM-DD
+    const dayStart = new Date(target)
+    dayStart.setHours(0, 0, 0, 0)
+    const dayEnd = new Date(target)
+    dayEnd.setHours(23, 59, 59, 999)
 
-    const { data, error } = await this.supabase
-      .getAdminClient()
-      .from('contributions')
-      .select(`
-        id, group_id, member_id, cycle_number, status, due_date,
-        group_members!inner(name, phone),
-        groups!inner(name, current_cycle, subscriptions!inner(plan, status))
-      `)
-      .eq('status', 'pending')
-      .gte('due_date', `${dateStr}T00:00:00.000Z`)
-      .lte('due_date', `${dateStr}T23:59:59.999Z`)
-      .in('groups.subscriptions.plan', ['smart', 'pro'])
-      .in('groups.subscriptions.status', ['trialing', 'active'])
+    const qb = this.contributionsRepo.createQueryBuilder('c')
+      .innerJoinAndSelect('c.member', 'm')
+      .innerJoinAndSelect('c.group', 'g')
+      .innerJoin(SubscriptionEntity, 's', 's.userId = g.adminId')
+      .where('c.status = :status', { status: ContributionStatus.PENDING })
+      .andWhere('c.dueDate >= :start', { start: dayStart.toISOString() })
+      .andWhere('c.dueDate <= :end', { end: dayEnd.toISOString() })
+      .andWhere('s.plan IN (:...plans)', { plans: ['smart', 'pro'] })
+      .andWhere('s.status IN (:...status)', { status: ['trialing', 'active'] })
 
-    if (error) throw error
-    return data || []
+    const contributions = await qb.getMany()
+
+    return contributions.map(c => ({
+      id: c.id,
+      group_id: c.groupId,
+      member_id: c.memberId,
+      cycle_number: c.cycleNumber,
+      status: c.status,
+      due_date: c.dueDate,
+      group_members: { id: c.member.id, name: c.member.name, phone: c.member.phone },
+      groups: { id: c.group.id, name: c.group.name, current_cycle: c.group.currentCycle },
+    }))
   }
 
   async getOverdueContributions(daysPast: number) {
     const target = new Date()
     target.setDate(target.getDate() - daysPast)
-    const dateStr = target.toISOString().split('T')[0]
+    const dayStart = new Date(target)
+    dayStart.setHours(0, 0, 0, 0)
 
-    const { data, error } = await this.supabase
-      .getAdminClient()
-      .from('contributions')
-      .select(`
-        id, group_id, member_id, cycle_number, status, due_date,
-        group_members!inner(name, phone),
-        groups!inner(name, current_cycle, subscriptions!inner(plan, status))
-      `)
-      .eq('status', 'pending')
-      .gte('due_date', `${dateStr}T00:00:00.000Z`)
-      .lte('due_date', `${dateStr}T23:59:59.999Z`)
-      .in('groups.subscriptions.plan', ['smart', 'pro'])
-      .in('groups.subscriptions.status', ['trialing', 'active'])
+    const qb = this.contributionsRepo.createQueryBuilder('c')
+      .innerJoinAndSelect('c.member', 'm')
+      .innerJoinAndSelect('c.group', 'g')
+      .innerJoin(SubscriptionEntity, 's', 's.userId = g.adminId')
+      .where('c.status = :status', { status: ContributionStatus.PENDING })
+      .andWhere('c.dueDate <= :dayStart', { dayStart: dayStart.toISOString() })
+      .andWhere('s.plan IN (:...plans)', { plans: ['smart', 'pro'] })
+      .andWhere('s.status IN (:...status)', { status: ['trialing', 'active'] })
 
-    if (error) throw error
-    return data || []
+    const contributions = await qb.getMany()
+
+    return contributions.map(c => ({
+      id: c.id,
+      group_id: c.groupId,
+      member_id: c.memberId,
+      cycle_number: c.cycleNumber,
+      status: c.status,
+      due_date: c.dueDate,
+      group_members: { id: c.member.id, name: c.member.name, phone: c.member.phone },
+      groups: { id: c.group.id, name: c.group.name, current_cycle: c.group.currentCycle },
+    }))
   }
 
   async getPendingContributions(groupId: string, cycleNumber: number) {
-    const { data, error } = await this.supabase
-      .getAdminClient()
-      .from('contributions')
-      .select('member_id, group_members(name, phone)')
-      .eq('group_id', groupId)
-      .eq('cycle_number', cycleNumber)
-      .eq('status', 'pending')
+    const contributions = await this.contributionsRepo.find({
+      where: { groupId, cycleNumber, status: ContributionStatus.PENDING },
+      relations: { member: true },
+    })
 
-    if (error) throw error
-    return data || []
+    return contributions.map(c => ({ member_id: c.memberId, group_members: { name: c.member.name, phone: c.member.phone, id: c.member.id } }))
   }
 }

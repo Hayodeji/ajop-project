@@ -1,5 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common'
-import { SupabaseService } from '../supabase/supabase.service'
+import { InjectRepository } from '@nestjs/typeorm'
+import { Repository } from 'typeorm'
+import { AuditLogEntity } from '../database/entities/audit-log.entity'
 
 export type AuditEventType =
   | 'group.created'
@@ -15,6 +17,7 @@ export type AuditEventType =
 export interface AuditEntry {
   event_type: AuditEventType
   actor_id?: string
+  target_type?: string
   target_id?: string
   meta?: Record<string, any>
 }
@@ -23,17 +26,21 @@ export interface AuditEntry {
 export class AuditService {
   private readonly logger = new Logger(AuditService.name)
 
-  constructor(private readonly supabase: SupabaseService) {}
+  constructor(
+    @InjectRepository(AuditLogEntity)
+    private readonly auditRepo: Repository<AuditLogEntity>,
+  ) {}
 
   async log(entry: AuditEntry): Promise<void> {
     try {
-      const { error } = await this.supabase.getAdminClient().from('audit_logs').insert({
-        action: entry.event_type,       // schema column: action
-        actor_id: entry.actor_id ?? null,
-        target_id: entry.target_id ?? null,
-        metadata: entry.meta ?? null,   // schema column: metadata
-      })
-      if (error) this.logger.warn(`Audit log insert failed: ${error.message}`)
+      const record = {
+        actorId: entry.actor_id || null,
+        action: entry.event_type,
+        targetType: entry.target_type || null,
+        targetId: entry.target_id || null,
+        metadata: entry.meta || null,
+      } as AuditLogEntity
+      await this.auditRepo.save(record)
     } catch (err) {
       this.logger.warn(`Audit log error: ${err?.message}`)
     }

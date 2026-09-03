@@ -1,68 +1,54 @@
 import { Injectable } from '@nestjs/common'
-import { SupabaseService } from '../supabase/supabase.service'
-import { Payout } from './payouts.schema'
-import { CreatePayoutInput, UpdatePayoutInput } from './payouts.dto'
+import { InjectRepository } from '@nestjs/typeorm'
+import { Repository } from 'typeorm'
+import { PayoutEntity } from '../database/entities/payout.entity'
+import { GroupMemberEntity } from '../database/entities/group-member.entity'
 
 @Injectable()
 export class PayoutsRepo {
-  constructor(private readonly supabase: SupabaseService) {}
+  constructor(
+    @InjectRepository(PayoutEntity)
+    private readonly payoutsRepo: Repository<PayoutEntity>,
+    @InjectRepository(GroupMemberEntity)
+    private readonly membersRepo: Repository<GroupMemberEntity>,
+  ) {}
 
-  async create(input: CreatePayoutInput): Promise<Payout> {
-    const { data, error } = await this.supabase
-      .getAdminClient()
-      .from('payouts')
-      .insert(input)
-      .select()
-      .single()
-
-    if (error) throw error
-    return data
+  async create(input: any): Promise<any> {
+    const entity = this.payoutsRepo.create({
+      groupId: input.group_id || input.groupId,
+      memberId: input.member_id || input.memberId,
+      cycleNumber: input.cycle_number || input.cycleNumber,
+      amount: input.amount,
+      paidOutAt: input.paid_out_at || input.paidOutAt,
+      receiptUrl: input.receipt_url || input.receiptUrl,
+    })
+    return this.payoutsRepo.save(entity)
   }
 
-  async findAllByGroup(groupId: string): Promise<Payout[]> {
-    const { data, error } = await this.supabase
-      .getAdminClient()
-      .from('payouts')
-      .select('*, group_members(name)')
-      .eq('group_id', groupId)
-      .order('cycle_number', { ascending: false })
+  async findAllByGroup(groupId: string): Promise<any[]> {
+    const rows = await this.payoutsRepo.createQueryBuilder('p')
+      .leftJoinAndSelect('p.member', 'm')
+      .where('p.groupId = :groupId', { groupId })
+      .orderBy('p.cycleNumber', 'DESC')
+      .getMany()
 
-    if (error) throw error
-    return data || []
+    return rows.map(r => ({ ...r, group_members: r.member ? { name: r.member.name } : null }))
   }
 
-  async findById(id: string): Promise<Payout | null> {
-    const { data, error } = await this.supabase
-      .getAdminClient()
-      .from('payouts')
-      .select('*')
-      .eq('id', id)
-      .maybeSingle()
-
-    if (error) throw error
-    return data
+  async findById(id: string): Promise<any | null> {
+    return this.payoutsRepo.findOne({ where: { id } })
   }
 
-  async update(id: string, input: UpdatePayoutInput): Promise<Payout> {
-    const { data, error } = await this.supabase
-      .getAdminClient()
-      .from('payouts')
-      .update(input)
-      .eq('id', id)
-      .select()
-      .single()
-
-    if (error) throw error
-    return data
+  async update(id: string, input: any): Promise<any> {
+    await this.payoutsRepo.update(id, {
+      amount: input.amount,
+      receiptUrl: input.receipt_url ?? input.receiptUrl,
+      paidOutAt: input.paid_out_at ?? input.paidOutAt,
+    })
+    return this.payoutsRepo.findOne({ where: { id } })
   }
 
   async delete(id: string): Promise<void> {
-    const { error } = await this.supabase
-      .getAdminClient()
-      .from('payouts')
-      .delete()
-      .eq('id', id)
-
-    if (error) throw error
+    await this.payoutsRepo.delete(id)
   }
 }

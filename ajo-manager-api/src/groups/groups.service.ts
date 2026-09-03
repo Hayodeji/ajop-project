@@ -38,10 +38,7 @@ export class GroupsService {
 
     let group: Group
     try {
-      group = await this.groupsRepo.create(adminId, {
-        ...input,
-        public_token: publicToken,
-      })
+      group = await this.groupsRepo.create(adminId, input, publicToken)
     } catch (error) {
       this.logger.error(`Create group failed: ${error.message}`)
       throw new InternalServerErrorException('Could not create the group.')

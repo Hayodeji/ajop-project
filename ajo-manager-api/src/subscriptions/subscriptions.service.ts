@@ -7,35 +7,41 @@ import {
 } from '@nestjs/common';
 import axios from 'axios';
 import { ConfigService } from '@nestjs/config';
-import { SupabaseService } from '../supabase/supabase.service';
 import { SubscriptionsRepo } from './subscriptions.repo';
 import { SubscriptionPlan, SubscriptionStatus, PLAN_AMOUNTS, PLAN_GROUP_LIMITS, PLAN_MEMBER_LIMITS } from './subscriptions.schema';
+import { InjectRepository } from '@nestjs/typeorm'
+import { Repository } from 'typeorm'
+import { ProfileEntity, ProfilePlan } from '../database/entities/profile.entity'
 
 @Injectable()
 export class SubscriptionsService {
   private readonly logger = new Logger(SubscriptionsService.name);
 
   constructor(
-    private readonly supabase: SupabaseService,
     private readonly config: ConfigService,
     private readonly subscriptionsRepo: SubscriptionsRepo,
+    @InjectRepository(ProfileEntity)
+    private readonly profileRepo: Repository<ProfileEntity>,
   ) {}
 
   private mapSubscription(data: any) {
     if (!data) return null;
     let expires_at = new Date();
-    const trial_ends_at = data.trial_ends_at ? new Date(data.trial_ends_at) : null;
-    
+    const trialEnds = data.trial_ends_at ?? data.trialEndsAt
+    const trial_ends_at = trialEnds ? new Date(trialEnds) : null;
+    const currentPeriodEnd = data.current_period_end ?? data.currentPeriodEnd
+
     if (data.status === 'trialing' && trial_ends_at) {
       expires_at = trial_ends_at;
-    } else if (data.status === 'active' && data.current_period_end) {
-      expires_at = new Date(data.current_period_end);
+    } else if (data.status === 'active' && currentPeriodEnd) {
+      expires_at = new Date(currentPeriodEnd);
     }
-    
-    return { 
-      ...data, 
+
+    return {
+      ...data,
       trial_ends_at,
-      expires_at 
+      current_period_end: currentPeriodEnd ? new Date(currentPeriodEnd) : null,
+      expires_at,
     };
   }
 
@@ -104,10 +110,13 @@ export class SubscriptionsService {
     if (existing) {
       const now = new Date();
       let isExpired = true;
-      if (existing.status === SubscriptionStatus.TRIALING && existing.trial_ends_at) {
-        isExpired = new Date(existing.trial_ends_at) < now;
-      } else if (existing.status === SubscriptionStatus.ACTIVE && existing.current_period_end) {
-        isExpired = new Date(existing.current_period_end) < now;
+      const existingTrial = (existing as any).trial_ends_at ?? (existing as any).trialEndsAt
+      const existingPeriodEnd = (existing as any).current_period_end ?? (existing as any).currentPeriodEnd
+
+      if (existing.status === SubscriptionStatus.TRIALING && existingTrial) {
+        isExpired = new Date(existingTrial) < now;
+      } else if (existing.status === SubscriptionStatus.ACTIVE && existingPeriodEnd) {
+        isExpired = new Date(existingPeriodEnd) < now;
       }
 
       if (!isExpired && (existing.status === SubscriptionStatus.ACTIVE || existing.status === SubscriptionStatus.TRIALING)) {
@@ -142,10 +151,8 @@ export class SubscriptionsService {
 
     let email = fallbackEmail
     try {
-      const { data } = await this.supabase.getAdminClient().auth.admin.getUserById(userId)
-      if (data?.user?.email) {
-        email = data.user.email
-      }
+      const profile = await this.profileRepo.findOne({ where: { userId } })
+      if (profile?.email) email = profile.email
     } catch (e) {
       this.logger.warn(`Could not fetch fresh user email for ${userId}`)
     }
@@ -208,11 +215,7 @@ export class SubscriptionsService {
   }
 
   private async syncProfilePlan(userId: string, plan: SubscriptionPlan) {
-    await this.supabase
-      .getAdminClient()
-      .from('profiles')
-      .update({ plan, is_pro: plan === 'pro' })
-      .eq('user_id', userId);
+    await this.profileRepo.update({ userId }, { plan: plan as unknown as ProfilePlan, isPro: plan === 'pro' })
   }
 
   /**
@@ -231,8 +234,8 @@ export class SubscriptionsService {
     const planGroupDefault = PLAN_GROUP_LIMITS[plan] ?? PLAN_GROUP_LIMITS['basic'];
     const planMemberDefault = PLAN_MEMBER_LIMITS[plan] ?? PLAN_MEMBER_LIMITS['basic'];
 
-    const customGroup  = (data as any)?.custom_group_limit  ?? null;
-    const customMember = (data as any)?.custom_member_limit ?? null;
+    const customGroup  = (data as any)?.custom_group_limit ?? (data as any)?.customGroupLimit ?? null;
+    const customMember = (data as any)?.custom_member_limit ?? (data as any)?.customMemberLimit ?? null;
 
     return {
       groupLimit:          customGroup  !== null ? customGroup  : planGroupDefault,
@@ -248,9 +251,10 @@ export class SubscriptionsService {
     if (!data) return SubscriptionPlan.BASIC;
     if (data.status === SubscriptionStatus.TRIALING) return data.plan as SubscriptionPlan;
     if (data.status === SubscriptionStatus.ACTIVE) {
+      const currentPeriodEnd = (data as any).current_period_end ?? (data as any).currentPeriodEnd
       if (
-        data.current_period_end &&
-        new Date(data.current_period_end) < new Date()
+        currentPeriodEnd &&
+        new Date(currentPeriodEnd) < new Date()
       )
         return SubscriptionPlan.BASIC;
       return data.plan as SubscriptionPlan;

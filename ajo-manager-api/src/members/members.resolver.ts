@@ -1,6 +1,5 @@
 import { Resolver, Query, Mutation, Args, ID } from '@nestjs/graphql'
 import { UseGuards } from '@nestjs/common'
-import type { User } from '@supabase/supabase-js'
 import { GqlAuthGuard } from '../auth/gql-auth.guard'
 import { CurrentUser } from '../auth/current-user.decorator'
 import { MembersService } from './members.service'
@@ -14,7 +13,7 @@ export class MembersResolver {
 
   @Mutation(() => Member)
   inviteMember(
-    @CurrentUser() user: User,
+    @CurrentUser() user: any,
     @Args('input') input: CreateMemberInput,
   ) {
     return this.membersService.inviteMember(user.id, input)
@@ -22,7 +21,7 @@ export class MembersResolver {
 
   @Query(() => [Member])
   members(
-    @CurrentUser() user: User,
+    @CurrentUser() user: any,
     @Args('groupId', { type: () => ID }) groupId: string,
   ) {
     return this.membersService.getMembers(groupId, user.id)
@@ -30,7 +29,7 @@ export class MembersResolver {
 
   @Query(() => Member, { nullable: true })
   member(
-    @CurrentUser() user: User,
+    @CurrentUser() user: any,
     @Args('id', { type: () => ID }) id: string,
   ) {
     return this.membersService.getMember(id, user.id)
@@ -38,7 +37,7 @@ export class MembersResolver {
 
   @Mutation(() => Member)
   updateMember(
-    @CurrentUser() user: User,
+    @CurrentUser() user: any,
     @Args('input') input: UpdateMemberInput,
   ) {
     return this.membersService.updateMember(user.id, input)
@@ -46,7 +45,7 @@ export class MembersResolver {
 
   @Mutation(() => Boolean)
   removeMember(
-    @CurrentUser() user: User,
+    @CurrentUser() user: any,
     @Args() args: MemberArgs,
   ) {
     return this.membersService.removeMember(user.id, args.id)

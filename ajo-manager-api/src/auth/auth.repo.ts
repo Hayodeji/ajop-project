@@ -1,68 +1,42 @@
 import { Injectable } from '@nestjs/common'
-import { SupabaseService } from '../supabase/supabase.service'
+import { InjectRepository } from '@nestjs/typeorm'
+import { Repository } from 'typeorm'
+import { ProfileEntity } from '../database/entities/profile.entity'
 
 @Injectable()
 export class AuthRepo {
-  constructor(private readonly supabase: SupabaseService) {}
+  constructor(
+    @InjectRepository(ProfileEntity)
+    private readonly profileRepo: Repository<ProfileEntity>,
+  ) {}
 
   async findProfileByUserId(userId: string) {
-    const { data, error } = await this.supabase
-      .getAdminClient()
-      .from('profiles')
-      .select('*')
-      .eq('user_id', userId)
-      .maybeSingle()
-
-    if (error) throw error
-    return data
+    return this.profileRepo.findOne({ where: { userId } })
   }
 
   async findProfileByPhone(phone: string) {
-    const { data, error } = await this.supabase
-      .getAdminClient()
-      .from('profiles')
-      .select('id')
-      .eq('phone', phone)
-      .maybeSingle()
-
-    if (error) throw error
-    return data
+    return this.profileRepo.findOne({ where: { phone }, select: { id: true } })
   }
 
   async findByReferralCode(code: string) {
-    const { data, error } = await this.supabase
-      .getAdminClient()
-      .from('profiles')
-      .select('user_id')
-      .eq('referral_code', code)
-      .maybeSingle()
-
-    if (error) throw error
-    return data
+    return this.profileRepo.findOne({ where: { referralCode: code }, select: { userId: true } })
   }
 
   async updateProfile(userId: string, updates: any) {
-    const { data, error } = await this.supabase
-      .getAdminClient()
-      .from('profiles')
-      .update(updates)
-      .eq('user_id', userId)
-      .select('*')
-      .single()
-
-    if (error) throw error
-    return data
+    await this.profileRepo.update({ userId }, updates)
+    return this.profileRepo.findOne({ where: { userId } })
   }
 
   async createProfile(profile: any) {
-    const { data, error } = await this.supabase
-      .getAdminClient()
-      .from('profiles')
-      .insert(profile)
-      .select('*')
-      .single()
-
-    if (error) throw error
-    return data
+    const ent = this.profileRepo.create({
+      userId: profile.user_id || profile.userId,
+      name: profile.name,
+      phone: profile.phone,
+      email: profile.email,
+      plan: profile.plan,
+      isPro: profile.is_pro ?? profile.isPro,
+      role: profile.role,
+    })
+    return this.profileRepo.save(ent)
   }
 }

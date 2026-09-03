@@ -1,4 +1,4 @@
-import { IsEnum, IsNotEmpty, IsNumber, IsOptional, IsString, IsUrl } from 'class-validator'
+import { IsEnum, IsNotEmpty, IsNumber, IsOptional, IsString } from 'class-validator'
 import { plainToInstance } from 'class-transformer'
 import { validateSync } from 'class-validator'
 
@@ -15,17 +15,6 @@ class EnvironmentVariables {
   @IsNumber()
   PORT!: number
 
-  @IsUrl({ require_tld: false })
-  SUPABASE_URL!: string
-
-  @IsString()
-  @IsNotEmpty()
-  SUPABASE_ANON_KEY!: string
-
-  @IsString()
-  @IsNotEmpty()
-  SUPABASE_SERVICE_ROLE_KEY!: string
-
   @IsString()
   @IsNotEmpty()
   CORS_ORIGINS!: string
@@ -41,10 +30,6 @@ class EnvironmentVariables {
   @IsOptional()
   @IsString()
   WHATSAPP_PHONE_ID: string = ''
-
-  @IsOptional()
-  @IsString()
-  SUPABASE_STORAGE_BUCKET: string = 'receipts'
 
   @IsOptional()
   @IsString()
